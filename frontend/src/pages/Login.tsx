@@ -95,6 +95,7 @@ export default function Login() {
           <p className="font-medium mb-2 text-gray-300">Demo credentials:</p>
           <p>Admin: <span className="font-mono">admin@example.com</span> / <span className="font-mono">admin123</span></p>
           <p>Staff: <span className="font-mono">staff@example.com</span> / <span className="font-mono">staff123</span></p>
+          <p>Client: <span className="font-mono">client@example.com</span> / <span className="font-mono">client123</span></p>
         </div>
       </div>
     </div>
