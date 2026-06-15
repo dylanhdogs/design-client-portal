@@ -28,7 +28,15 @@ export default function Login() {
         navigate('/');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
+      if (!err.response) {
+        setError('Cannot reach the backend API. Check that the backend is running and VITE_API_URL is set correctly.');
+      } else if (err.response.status === 404) {
+        setError('Login API was not found. Cloudflare Pages needs VITE_API_URL set to your deployed backend.');
+      } else if (err.response.status === 401) {
+        setError('Invalid email or password.');
+      } else {
+        setError(err.response?.data?.error || 'Login failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
