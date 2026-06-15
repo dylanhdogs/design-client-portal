@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   @default("STAFF")
+  name         String
+  clientId     String?  @map("client_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  consultations  Consultation[]
+  documents      Document[]
+  communications Communication[]
+  poolNotes      PoolNote[]
+  client         Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@map("users")
+}
+
+model Client {
+  id          String   @id @default(uuid())
+  name        String
+  company     String?
+  email       String?
+  phone       String?
+  address     String?
+  status      String   @default("LEAD")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  consultations  Consultation[]
+  documents      Document[]
+  communications Communication[]
+  poolProject    PoolProject?
+  users          User[]
+
+  @@map("clients")
+}
+
+model Consultation {
+  id        String   @id @default(uuid())
+  clientId  String   @map("client_id")
+  userId    String   @map("user_id")
+  title     String
+  date      DateTime
+  notes     String?
+  status    String   @default("SCHEDULED")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@map("consultations")
+}
+
+model Document {
+  id            String   @id @default(uuid())
+  clientId      String   @map("client_id")
+  consultationId String? @map("consultation_id")
+  userId        String   @map("user_id")
+  filename      String
+  originalName  String   @map("original_name")
+  mimeType      String   @map("mime_type")
+  size          Int
+  description   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+model Communication {
+  id        String   @id @default(uuid())
+  clientId  String   @map("client_id")
+  userId    String   @map("user_id")
+  type      String   @default("EMAIL")
+  subject   String?
+  body      String
+  direction String   @default("OUTBOUND")
+  date      DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("communications")
+}
+
+model PoolProject {
+  id              String   @id @default(uuid())
+  clientId        String   @unique @map("client_id")
+  poolType        String?  @map("pool_type")
+  poolShape       String?  @map("pool_shape")
+  dimensions      String?
+  estimatedBudget String?  @map("estimated_budget")
+  notes           String?
+  currentPhase    Int      @default(1) @map("current_phase")
+  status          String   @default("INTAKE")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  client   Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  phases   ProjectPhase[]
+  poolNotes PoolNote[]
+
+  @@map("pool_projects")
+}
+
+model ProjectPhase {
+  id             String   @id @default(uuid())
+  projectId      String   @map("project_id")
+  name           String
+  displayName    String   @map("display_name")
+  order          Int
+  status         String   @default("NOT_STARTED")
+  description    String?
+  startDate      DateTime? @map("start_date")
+  completedDate  DateTime? @map("completed_date")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  project        PoolProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checklistItems ChecklistItem[]
+
+  @@map("project_phases")
+}
+
+model ChecklistItem {
+  id          String    @id @default(uuid())
+  phaseId     String    @map("phase_id")
+  description String
+  isCompleted Boolean   @default(false) @map("is_completed")
+  completedAt DateTime? @map("completed_at")
+  completedBy String?   @map("completed_by")
+  order       Int
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  phase ProjectPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+
+  @@map("checklist_items")
+}
+
+model PoolNote {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project PoolProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("pool_notes")
+}
