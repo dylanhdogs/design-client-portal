@@ -130,6 +130,8 @@ For Render, use one of these configurations:
 
 Do not use the root `npm run build` command for backend-only Render deploys unless you intentionally want to build both backend and frontend.
 
+The backend `npm start` command runs `prisma migrate deploy` and seeds demo accounts before starting Express. This prevents login failures caused by an empty hosted SQLite database.
+
 ### SPA Routing
 
 `frontend/public/_redirects` is included so direct visits to routes like `/clients` or `/my-project` load the React app correctly on Cloudflare Pages.
