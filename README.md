@@ -114,6 +114,22 @@ For local frontend development, copy `frontend/.env.example` to `frontend/.env` 
 
 Use a Node-capable host for the backend, such as Render, Railway, Fly.io, or a VPS. Make sure the backend allows requests from your Cloudflare Pages domain. The current backend uses permissive CORS by default.
 
+For Render, use one of these configurations:
+
+**Option A: Render root directory set to repository root**
+
+- **Root Directory**: leave blank or `/`
+- **Build Command**: `npm run build:backend`
+- **Start Command**: `npm start`
+
+**Option B: Render root directory set to backend**
+
+- **Root Directory**: `backend`
+- **Build Command**: `npm ci && npm run build`
+- **Start Command**: `npm start`
+
+Do not use the root `npm run build` command for backend-only Render deploys unless you intentionally want to build both backend and frontend.
+
 ### SPA Routing
 
 `frontend/public/_redirects` is included so direct visits to routes like `/clients` or `/my-project` load the React app correctly on Cloudflare Pages.
