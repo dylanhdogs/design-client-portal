@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize } from '../middleware/auth';
+import { getJwtSecret } from '../utils/env';
 
 const router = express.Router();
 
@@ -39,7 +40,7 @@ router.post('/login', async (req, res, next) => {
     
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name, clientId: user.clientId },
-      process.env.JWT_SECRET!,
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
     
