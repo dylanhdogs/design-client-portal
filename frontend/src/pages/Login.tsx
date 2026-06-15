@@ -35,13 +35,14 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden select-none"
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden select-none px-4 py-6"
       style={{ backgroundImage: 'url(/Signature-nighttime-luxury-phoenix.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
       <div className="absolute inset-0 bg-black/50 pointer-events-none" />
-      <div className="relative z-10 w-full max-w-md bg-black rounded-xl shadow-lg p-8">
+      <div className="relative z-10 w-full max-w-md bg-black rounded-xl shadow-lg p-5 sm:p-8">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
-            <Logo size="lg" />
+            <Logo size="md" className="sm:hidden" />
+            <Logo size="lg" className="hidden sm:flex" />
           </div>
           <p className="text-gray-400 mt-2">Sign in to your account</p>
         </div>

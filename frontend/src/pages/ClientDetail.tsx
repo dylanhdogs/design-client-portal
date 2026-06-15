@@ -171,16 +171,16 @@ export default function ClientDetail() {
       )}
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
           <button
             onClick={() => navigate('/clients')}
-            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+            className="self-start p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900 break-words">{client.name}</h1>
               <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(client.status)}`}>
                 {client.status}
               </span>
@@ -191,7 +191,7 @@ export default function ClientDetail() {
               {client.phone && <span>{client.phone}</span>}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {!client.poolProject && (
               <button
                 onClick={handleCreatePoolProject}
@@ -267,8 +267,8 @@ export default function ClientDetail() {
 
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <div className="flex">
+        <div className="border-b border-gray-200 overflow-x-auto">
+          <div className="flex min-w-max">
             <button
               onClick={() => setActiveTab('consultations')}
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${

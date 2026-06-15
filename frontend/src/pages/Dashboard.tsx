@@ -49,8 +49,8 @@ export default function Dashboard() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 mb-1">Total Clients</p>
@@ -62,7 +62,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 mb-1">Active</p>
@@ -74,7 +74,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 mb-1">Leads</p>
@@ -86,7 +86,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 mb-1">Inactive</p>
@@ -101,7 +101,7 @@ export default function Dashboard() {
 
       {/* Recent Clients */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-4 md:px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-gray-900">Recent Clients</h2>
           <Link
             to="/clients"
@@ -116,20 +116,20 @@ export default function Dashboard() {
             <Link
               key={client.id}
               to={`/clients/${client.id}`}
-              className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              className="px-4 md:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 hover:bg-gray-50 transition-colors"
             >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold">
                   {client.name[0].toUpperCase()}
                 </div>
-                <div>
-                  <p className="font-medium text-gray-900">{client.name}</p>
-                  <p className="text-sm text-gray-500">
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 break-words">{client.name}</p>
+                  <p className="text-sm text-gray-500 break-words">
                     {client.company || 'No company'} • {client.status}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+              <div className="flex items-center gap-4 text-sm text-gray-500 sm:justify-end">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
                   {client._count?.consultations || 0}

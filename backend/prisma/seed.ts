@@ -159,10 +159,61 @@ async function seed() {
       role: 'STAFF'
     }
   });
+
+  let demoClient = await prisma.client.findFirst({
+    where: { email: 'client@example.com' }
+  });
+
+  if (!demoClient) {
+    demoClient = await prisma.client.create({
+      data: {
+        name: 'Demo Client',
+        company: 'Signature Exteriors Demo',
+        email: 'client@example.com',
+        phone: '555-0100',
+        address: '123 Demo Backyard Lane, Phoenix, AZ',
+        status: 'ACTIVE',
+        notes: 'Demo client for client portal login testing.'
+      }
+    });
+  }
+
+  const existingProject = await prisma.poolProject.findUnique({
+    where: { clientId: demoClient.id }
+  });
+
+  if (!existingProject) {
+    await createPoolProjectWithPhases(demoClient.id, {
+      poolType: 'In-Ground',
+      poolShape: 'Freeform',
+      dimensions: '32 ft x 16 ft',
+      estimatedBudget: '$85,000 - $110,000',
+      notes: 'Demo pool project for client portal walkthrough.'
+    });
+  }
+
+  const clientPassword = await bcrypt.hash('client123', 10);
+  await prisma.user.upsert({
+    where: { email: 'client@example.com' },
+    update: {
+      passwordHash: clientPassword,
+      name: 'Demo Client',
+      role: 'CLIENT',
+      clientId: demoClient.id
+    },
+    create: {
+      email: 'client@example.com',
+      passwordHash: clientPassword,
+      name: 'Demo Client',
+      role: 'CLIENT',
+      clientId: demoClient.id
+    }
+  });
   
   console.log('Seed completed successfully!');
   console.log('Admin: admin@example.com / admin123');
   console.log('Staff: staff@example.com / staff123');
+  console.log('Client: client@example.com / client123');
 }
 
 seed()

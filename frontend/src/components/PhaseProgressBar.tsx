@@ -31,24 +31,24 @@ export default function PhaseProgressBar({ currentPhase, phases, onPhaseClick, i
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between relative">
+      <div className="flex items-start justify-between gap-4 overflow-x-auto pb-2 relative">
         {/* Connection line */}
-        <div className="absolute top-3 left-0 right-0 h-1 bg-gray-200 -z-10"></div>
+        <div className="hidden sm:block absolute top-3 left-0 right-0 h-1 bg-gray-200 -z-10"></div>
         <div
-          className="absolute top-3 left-0 h-1 bg-green-500 -z-10 transition-all"
+          className="hidden sm:block absolute top-3 left-0 h-1 bg-green-500 -z-10 transition-all"
           style={{ width: `${Math.min(((currentPhase - 1) / (phases.length - 1)) * 100, 100)}%` }}
         ></div>
 
         {phases.map((phase) => (
           <div
             key={phase.order}
-            className={`flex flex-col items-center gap-2 ${interactive ? 'cursor-pointer' : ''}`}
+            className={`flex min-w-24 flex-col items-center gap-2 ${interactive ? 'cursor-pointer' : ''}`}
             onClick={() => interactive && onPhaseClick?.(phase.order)}
           >
             <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${getPhaseColor(phase.order, phase.status)}`}>
               {getPhaseIcon(phase.order, phase.status)}
             </div>
-            <span className="text-xs font-medium text-center max-w-[80px] leading-tight">
+            <span className="text-xs font-medium text-center max-w-[90px] leading-tight">
               {phase.displayName}
             </span>
           </div>

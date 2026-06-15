@@ -52,14 +52,14 @@ export default function Clients() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
           <p className="text-gray-500 mt-1">Manage your client relationships</p>
         </div>
         <Link
           to="/clients/new"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus className="h-4 w-4" />
           <span>Add Client</span>
@@ -99,7 +99,70 @@ export default function Clients() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="md:hidden divide-y divide-gray-200">
+            {clients.map((client) => (
+              <div key={client.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold text-sm">
+                      {client.name[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <Link
+                        to={`/clients/${client.id}`}
+                        className="font-medium text-gray-900 hover:text-blue-600 break-words"
+                      >
+                        {client.name}
+                      </Link>
+                      <p className="text-sm text-gray-500 break-words">{client.company || 'No company'}</p>
+                    </div>
+                  </div>
+                  <span className={`shrink-0 inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(client.status)}`}>
+                    {client.status}
+                  </span>
+                </div>
+                <div className="mt-3 text-sm text-gray-500 space-y-1">
+                  <p className="break-all">{client.email || 'No email'}</p>
+                  <p>{client.phone || 'No phone'}</p>
+                </div>
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 text-sm text-gray-500">
+                    <span title="Consultations">📋 {client._count?.consultations || 0}</span>
+                    <span title="Documents">📄 {client._count?.documents || 0}</span>
+                    <span title="Communications">💬 {client._count?.communications || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      to={`/clients/${client.id}/edit`}
+                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                      aria-label={`Edit ${client.name}`}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Link>
+                    {user?.role === 'ADMIN' && (
+                      <button
+                        onClick={() => handleDelete(client.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        aria-label={`Delete ${client.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {clients.length === 0 && (
+              <div className="text-center py-10 px-4 text-gray-500">
+                <Users className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                <p>No clients found</p>
+                <p className="text-sm mt-1">Try adjusting your search or filters</p>
+              </div>
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -178,6 +241,7 @@ export default function Clients() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

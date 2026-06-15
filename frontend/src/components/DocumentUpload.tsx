@@ -133,7 +133,7 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
     <div>
       {/* Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg p-6 mb-6 transition-colors ${
+        className={`border-2 border-dashed rounded-lg p-4 md:p-6 mb-6 transition-colors ${
           isDragging
             ? 'border-blue-500 bg-blue-50'
             : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
@@ -161,11 +161,11 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
       {/* Selected File Preview */}
       {selectedFile && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-gray-400" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <FileText className="h-5 w-5 shrink-0 text-gray-400" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 break-words">{selectedFile.name}</p>
                 <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
               </div>
             </div>
@@ -176,18 +176,18 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Description (optional)"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full sm:flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             />
             <button
               onClick={handleUpload}
               disabled={isUploading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               <Upload className="h-4 w-4" />
               {isUploading ? 'Uploading...' : 'Upload'}
@@ -198,13 +198,13 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
 
       {/* Documents List */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="space-y-2 p-6">
+        <div className="space-y-2 p-3 md:p-6">
           {documents.map((doc) => (
-            <div key={doc.id} className="flex items-center justify-between border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-gray-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{doc.originalName}</p>
+            <div key={doc.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+              <div className="flex items-start gap-3 min-w-0">
+                <FileText className="h-5 w-5 shrink-0 text-gray-400" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 break-words">{doc.originalName}</p>
                   <p className="text-xs text-gray-500">
                     {formatFileSize(doc.size)} • {doc.mimeType} • {new Date(doc.createdAt).toLocaleDateString()}
                   </p>
@@ -213,7 +213,7 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-end gap-2">
                 <button
                   onClick={() => handlePreview(doc)}
                   className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
@@ -251,14 +251,14 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
 
       {/* Preview Modal */}
       {previewDoc && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 md:p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-auto">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">{previewDoc.originalName}</h3>
+            <div className="flex items-start justify-between gap-3 p-3 md:p-4 border-b border-gray-200">
+              <h3 className="text-base md:text-lg font-medium text-gray-900 break-words min-w-0">{previewDoc.originalName}</h3>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => documentApi.download(clientId, previewDoc.id, previewDoc.originalName)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="hidden sm:flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
                   <Download className="h-4 w-4" />
                   Download
