@@ -85,7 +85,7 @@ export default function NotificationBell() {
       if (notification.phaseId) params.set('phase', notification.phaseId);
       if (notification.itemId) params.set('item', notification.itemId);
       const query = params.toString();
-      return `/my-project${query ? `?${query}` : ''}`;
+      return `/my-project/phase/${notification.phaseId || 'details'}${query ? `?${query}` : ''}`;
     }
 
     if (notification.clientId) {

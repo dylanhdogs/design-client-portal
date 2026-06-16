@@ -20,21 +20,31 @@ export default function MyProject() {
 
   useEffect(() => {
     const phaseId = searchParams.get('phase');
-    const itemId = searchParams.get('item');
 
     if (phaseId) {
       setExpandedPhase(phaseId);
     }
+  }, [searchParams]);
 
-    if (itemId) {
-      window.setTimeout(() => {
+  useEffect(() => {
+    const phaseId = searchParams.get('phase');
+    const itemId = searchParams.get('item');
+
+    if (!project || !itemId || (phaseId && expandedPhase !== phaseId)) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      window.requestAnimationFrame(() => {
         document.getElementById(`checklist-item-${itemId}`)?.scrollIntoView({
           behavior: 'smooth',
           block: 'center'
         });
-      }, 100);
-    }
-  }, [searchParams, project]);
+      });
+    }, 150);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchParams, project, expandedPhase]);
 
   const loadProject = async () => {
     try {
