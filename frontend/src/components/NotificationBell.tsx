@@ -75,7 +75,12 @@ export default function NotificationBell() {
   };
 
   const getNotificationUrl = (notification: Notification) => {
-    if (user?.role === 'CLIENT') {
+    const isClientNotification = user?.role === 'CLIENT'
+      || notification.type === 'APPROVED'
+      || notification.type === 'REJECTED'
+      || notification.type === 'REMINDER';
+
+    if (isClientNotification) {
       const params = new URLSearchParams();
       if (notification.phaseId) params.set('phase', notification.phaseId);
       if (notification.itemId) params.set('item', notification.itemId);
@@ -173,6 +178,9 @@ export default function NotificationBell() {
                     <p className="mt-1 text-xs text-gray-500">
                       {new Date(notification.createdAt).toLocaleString()}
                     </p>
+                    {(notification.phaseId || notification.itemId || notification.clientId) && (
+                      <p className="mt-1 text-xs font-medium text-blue-600">View item</p>
+                    )}
                   </div>
                   {!notification.isRead && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-600" />}
                 </button>
