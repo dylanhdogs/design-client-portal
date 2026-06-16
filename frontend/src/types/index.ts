@@ -108,6 +108,12 @@ export interface ChecklistItem {
   isCompleted: boolean;
   completedAt: string | null;
   completedBy: string | null;
+  verificationStatus: 'NOT_SUBMITTED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  submittedAt: string | null;
+  submittedBy: string | null;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
+  rejectionReason: string | null;
   order: number;
   createdAt: string;
 }

@@ -132,7 +132,13 @@ export const phaseApi = {
   }) => api.put(`/clients/${clientId}/project/phases/${phaseId}`, data),
   updateChecklist: (clientId: string, phaseId: string, itemId: string, data: {
     isCompleted: boolean;
-  }) => api.put(`/clients/${clientId}/project/phases/${phaseId}/checklist/${itemId}`, data)
+  }) => api.put(`/clients/${clientId}/project/phases/${phaseId}/checklist/${itemId}`, data),
+  submitChecklist: (clientId: string, phaseId: string, itemId: string) =>
+    api.post(`/clients/${clientId}/project/phases/${phaseId}/checklist/${itemId}/submit`),
+  verifyChecklist: (clientId: string, phaseId: string, itemId: string, data: {
+    approved: boolean;
+    rejectionReason?: string;
+  }) => api.put(`/clients/${clientId}/project/phases/${phaseId}/checklist/${itemId}/verify`, data)
 };
 
 // Pool Notes API

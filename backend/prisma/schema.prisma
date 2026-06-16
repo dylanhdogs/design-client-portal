@@ -147,6 +147,12 @@ model ChecklistItem {
   isCompleted Boolean   @default(false) @map("is_completed")
   completedAt DateTime? @map("completed_at")
   completedBy String?   @map("completed_by")
+  verificationStatus String @default("NOT_SUBMITTED") @map("verification_status")
+  submittedAt DateTime? @map("submitted_at")
+  submittedBy String?   @map("submitted_by")
+  verifiedAt  DateTime? @map("verified_at")
+  verifiedBy  String?   @map("verified_by")
+  rejectionReason String? @map("rejection_reason")
   order       Int
   createdAt   DateTime  @default(now()) @map("created_at")
 

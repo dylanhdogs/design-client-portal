@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { clientApi, consultationApi, documentApi, communicationApi, poolProjectApi, clientUserApi } from '../api';
-import { Client, Consultation, Communication, ProjectPhase } from '../types';
+import { clientApi, consultationApi, documentApi, communicationApi, poolProjectApi, clientUserApi, phaseApi } from '../api';
+import { Client, Consultation, Communication, ProjectPhase, ChecklistItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import CreateLoginForm from '../components/CreateLoginForm';
 import PhaseProgressBar from '../components/PhaseProgressBar';
@@ -117,6 +117,19 @@ export default function ClientDetail() {
     }
   };
 
+  const handleVerifyChecklistItem = async (phaseId: string, itemId: string, approved: boolean) => {
+    if (!client) return;
+
+    const rejectionReason = approved ? undefined : prompt('Why is this checklist item not approved?') || 'Not approved. Please revisit and resubmit.';
+
+    try {
+      await phaseApi.verifyChecklist(client.id, phaseId, itemId, { approved, rejectionReason });
+      loadClient();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'ACTIVE': return 'bg-green-100 text-green-800';
@@ -167,6 +180,19 @@ export default function ClientDetail() {
     if (phase.status !== 'IN_PROGRESS') return null;
     const startedAt = phase.startDate || phase.createdAt;
     return countBusinessDays(startedAt);
+  };
+
+  const getChecklistStatus = (item: ChecklistItem) => {
+    if (item.isCompleted || item.verificationStatus === 'APPROVED') {
+      return { label: 'Approved', color: 'bg-green-100 text-green-800' };
+    }
+    if (item.verificationStatus === 'SUBMITTED') {
+      return { label: 'Submitted', color: 'bg-blue-100 text-blue-800' };
+    }
+    if (item.verificationStatus === 'REJECTED') {
+      return { label: 'Rejected', color: 'bg-red-100 text-red-800' };
+    }
+    return { label: 'Not submitted', color: 'bg-gray-100 text-gray-700' };
   };
 
   if (isLoading) {
@@ -683,18 +709,52 @@ export default function ClientDetail() {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        {phase.checklistItems?.map((item) => (
-                          <div key={item.id} className="flex items-start gap-3">
-                            <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center ${
-                              item.isCompleted ? 'bg-green-500 border-green-500' : 'border-gray-300'
-                            }`}>
-                              {item.isCompleted && <CheckCircle className="h-3 w-3 text-white" />}
+                        {phase.checklistItems?.map((item) => {
+                          const itemStatus = getChecklistStatus(item);
+
+                          return (
+                          <div key={item.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center ${
+                                item.isCompleted ? 'bg-green-500 border-green-500' : 'border-gray-300'
+                              }`}>
+                                {item.isCompleted && <CheckCircle className="h-3 w-3 text-white" />}
+                              </div>
+                              <div className="min-w-0">
+                                <span className={`text-sm ${item.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
+                                  {item.description}
+                                </span>
+                                {item.rejectionReason && (
+                                  <p className="mt-1 text-xs text-red-600">Rejection note: {item.rejectionReason}</p>
+                                )}
+                              </div>
                             </div>
-                            <span className={`text-sm ${item.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
-                              {item.description}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                              <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${itemStatus.color}`}>
+                                {itemStatus.label}
+                              </span>
+                              {item.verificationStatus === 'SUBMITTED' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleVerifyChecklistItem(phase.id, item.id, true)}
+                                    className="px-3 py-1 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleVerifyChecklistItem(phase.id, item.id, false)}
+                                    className="px-3 py-1 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                     );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { poolProjectApi, poolNoteApi } from '../../api';
-import { PoolProject, ProjectPhase, PoolNote } from '../../types';
+import { poolProjectApi, poolNoteApi, phaseApi } from '../../api';
+import { PoolProject, ProjectPhase, PoolNote, ChecklistItem } from '../../types';
 import PhaseProgressBar from '../../components/PhaseProgressBar';
 import { AlertCircle, CheckCircle, Circle, Clock, Send, User } from 'lucide-react';
 
@@ -38,6 +38,17 @@ export default function MyProject() {
     try {
       await poolNoteApi.create(project.clientId, { content: newNote });
       setNewNote('');
+      loadProject();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSubmitChecklistItem = async (phaseId: string, itemId: string) => {
+    if (!project) return;
+
+    try {
+      await phaseApi.submitChecklist(project.clientId, phaseId, itemId);
       loadProject();
     } catch (err) {
       console.error(err);
@@ -85,6 +96,25 @@ export default function MyProject() {
     return countBusinessDays(startedAt);
   };
 
+  const getChecklistStatus = (item: ChecklistItem) => {
+    if (item.isCompleted || item.verificationStatus === 'APPROVED') {
+      return { label: 'Approved by admin', color: 'bg-green-100 text-green-800' };
+    }
+    if (item.verificationStatus === 'SUBMITTED') {
+      return { label: 'Submitted for review', color: 'bg-blue-100 text-blue-800' };
+    }
+    if (item.verificationStatus === 'REJECTED') {
+      return { label: 'Needs revision', color: 'bg-red-100 text-red-800' };
+    }
+    return { label: 'Not submitted', color: 'bg-gray-100 text-gray-700' };
+  };
+
+  const shouldShowPhaseReminder = (phase: ProjectPhase) => {
+    const businessDays = getInProgressBusinessDays(phase);
+    const hasOpenItems = phase.checklistItems?.some((item) => !item.isCompleted && item.verificationStatus !== 'SUBMITTED');
+    return businessDays !== null && businessDays >= 4 && hasOpenItems;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -120,6 +150,7 @@ export default function MyProject() {
         {project.phases?.map((phase: ProjectPhase) => (
           (() => {
             const businessDays = getInProgressBusinessDays(phase);
+            const showReminder = shouldShowPhaseReminder(phase);
 
             return (
           <div key={phase.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -154,17 +185,50 @@ export default function MyProject() {
               <div className="px-4 md:px-6 pb-4 border-t border-gray-100">
                 <div className="mt-4 space-y-2">
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Checklist</h4>
+                  {showReminder && (
+                    <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      Reminder: this phase has been in progress for {businessDays} business {businessDays === 1 ? 'day' : 'days'}. Please submit any remaining checklist items for admin review.
+                    </div>
+                  )}
                   {phase.checklistItems?.map((item) => (
-                    <div key={item.id} className="flex items-start gap-3 py-2">
+                    (() => {
+                      const itemStatus = getChecklistStatus(item);
+                      const canSubmit = !item.isCompleted && item.verificationStatus !== 'SUBMITTED';
+
+                      return (
+                    <div key={item.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-2">
+                      <div className="flex items-start gap-3 min-w-0">
                       <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center ${
                         item.isCompleted ? 'bg-green-500 border-green-500' : 'border-gray-300'
                       }`}>
                         {item.isCompleted && <CheckCircle className="h-3 w-3 text-white" />}
                       </div>
-                      <span className={`text-sm ${item.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
-                        {item.description}
-                      </span>
+                        <div className="min-w-0">
+                          <span className={`text-sm ${item.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
+                            {item.description}
+                          </span>
+                          {item.rejectionReason && (
+                            <p className="mt-1 text-xs text-red-600">Admin note: {item.rejectionReason}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${itemStatus.color}`}>
+                          {itemStatus.label}
+                        </span>
+                        {canSubmit && (
+                          <button
+                            type="button"
+                            onClick={() => handleSubmitChecklistItem(phase.id, item.id)}
+                            className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                          >
+                            {item.verificationStatus === 'REJECTED' ? 'Resubmit' : 'Submit Complete'}
+                          </button>
+                        )}
+                      </div>
                     </div>
+                      );
+                    })()
                   ))}
                 </div>
               </div>
