@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { poolProjectApi, poolNoteApi, phaseApi } from '../../api';
 import { PoolProject, ProjectPhase, PoolNote, ChecklistItem } from '../../types';
@@ -6,6 +7,7 @@ import PhaseProgressBar from '../../components/PhaseProgressBar';
 import { AlertCircle, CheckCircle, Circle, Clock, Send, User } from 'lucide-react';
 
 export default function MyProject() {
+  const [searchParams] = useSearchParams();
   const [project, setProject] = useState<PoolProject | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -15,6 +17,24 @@ export default function MyProject() {
   useEffect(() => {
     loadProject();
   }, []);
+
+  useEffect(() => {
+    const phaseId = searchParams.get('phase');
+    const itemId = searchParams.get('item');
+
+    if (phaseId) {
+      setExpandedPhase(phaseId);
+    }
+
+    if (itemId) {
+      window.setTimeout(() => {
+        document.getElementById(`checklist-item-${itemId}`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }, 100);
+    }
+  }, [searchParams, project]);
 
   const loadProject = async () => {
     try {
@@ -196,7 +216,11 @@ export default function MyProject() {
                       const canSubmit = !item.isCompleted && item.verificationStatus !== 'SUBMITTED';
 
                       return (
-                    <div key={item.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-2">
+                    <div
+                      id={`checklist-item-${item.id}`}
+                      key={item.id}
+                      className={`flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-lg p-2 scroll-mt-24 ${searchParams.get('item') === item.id ? 'bg-amber-50 ring-1 ring-amber-200' : ''}`}
+                    >
                       <div className="flex items-start gap-3 min-w-0">
                       <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center ${
                         item.isCompleted ? 'bg-green-500 border-green-500' : 'border-gray-300'

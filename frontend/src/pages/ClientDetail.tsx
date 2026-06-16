@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { clientApi, consultationApi, documentApi, communicationApi, poolProjectApi, clientUserApi, phaseApi } from '../api';
 import { Client, Consultation, Communication, ProjectPhase, ChecklistItem } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,7 @@ import {
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [client, setClient] = useState<Client | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,6 +47,26 @@ export default function ClientDetail() {
       loadClient();
     }
   }, [id]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'consultations' || tab === 'documents' || tab === 'communications' || tab === 'poolProject') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const itemId = searchParams.get('item');
+
+    if (itemId && activeTab === 'poolProject') {
+      window.setTimeout(() => {
+        document.getElementById(`admin-checklist-item-${itemId}`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }, 100);
+    }
+  }, [searchParams, activeTab, client]);
 
   const loadClient = async () => {
     try {
@@ -713,7 +734,11 @@ export default function ClientDetail() {
                           const itemStatus = getChecklistStatus(item);
 
                           return (
-                          <div key={item.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                          <div
+                            id={`admin-checklist-item-${item.id}`}
+                            key={item.id}
+                            className={`flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 rounded-lg p-2 scroll-mt-24 ${searchParams.get('item') === item.id ? 'bg-amber-50 ring-1 ring-amber-200' : ''}`}
+                          >
                             <div className="flex items-start gap-3 min-w-0">
                               <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center ${
                                 item.isCompleted ? 'bg-green-500 border-green-500' : 'border-gray-300'

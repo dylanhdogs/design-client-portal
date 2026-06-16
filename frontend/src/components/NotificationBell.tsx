@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { notificationApi } from '../api';
 import { Notification } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 export default function NotificationBell() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -70,11 +74,32 @@ export default function NotificationBell() {
     }
   };
 
-  const markRead = async (notification: Notification) => {
+  const getNotificationUrl = (notification: Notification) => {
+    if (user?.role === 'CLIENT') {
+      const params = new URLSearchParams();
+      if (notification.phaseId) params.set('phase', notification.phaseId);
+      if (notification.itemId) params.set('item', notification.itemId);
+      const query = params.toString();
+      return `/my-project${query ? `?${query}` : ''}`;
+    }
+
+    if (notification.clientId) {
+      const params = new URLSearchParams({ tab: 'poolProject' });
+      if (notification.phaseId) params.set('phase', notification.phaseId);
+      if (notification.itemId) params.set('item', notification.itemId);
+      return `/clients/${notification.clientId}?${params.toString()}`;
+    }
+
+    return '/clients';
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
     if (!notification.isRead) {
       await notificationApi.markRead(notification.id);
-      loadNotifications();
     }
+    setIsOpen(false);
+    loadNotifications();
+    navigate(getNotificationUrl(notification));
   };
 
   const markAllRead = async () => {
@@ -139,7 +164,7 @@ export default function NotificationBell() {
                 <button
                   key={notification.id}
                   type="button"
-                  onClick={() => markRead(notification)}
+                  onClick={() => handleNotificationClick(notification)}
                   className={`flex w-full gap-3 px-4 py-3 text-left hover:bg-gray-50 ${notification.isRead ? 'bg-white' : 'bg-blue-50'}`}
                 >
                   <div className="mt-0.5 shrink-0">{getIcon(notification.type)}</div>
