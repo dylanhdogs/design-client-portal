@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { poolProjectApi, poolNoteApi, phaseApi } from '../../api';
 import { PoolProject, ProjectPhase, PoolNote, ChecklistItem } from '../../types';
 import PhaseProgressBar from '../../components/PhaseProgressBar';
+import PhaseCompletionCircle from '../../components/PhaseCompletionCircle';
 import { AlertCircle, CheckCircle, Circle, Clock, Send, User } from 'lucide-react';
 
 export default function MyProject() {
@@ -200,6 +201,7 @@ export default function MyProject() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                <PhaseCompletionCircle items={phase.checklistItems} size="sm" />
                 {businessDays !== null && (
                   <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800">
                     {businessDays} business {businessDays === 1 ? 'day' : 'days'} in progress

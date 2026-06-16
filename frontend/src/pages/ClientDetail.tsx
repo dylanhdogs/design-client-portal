@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import CreateLoginForm from '../components/CreateLoginForm';
 import PhaseProgressBar from '../components/PhaseProgressBar';
 import DocumentUpload from '../components/DocumentUpload';
+import PhaseCompletionCircle from '../components/PhaseCompletionCircle';
 import {
   ArrowLeft, Edit, Trash2, Calendar, FileText, MessageSquare,
   Plus, Phone, Mail, User,
@@ -682,7 +683,10 @@ export default function ClientDetail() {
 
                         return (
                           <div key={phase.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                            <span className="text-sm text-gray-700">{phase.displayName}</span>
+                            <div className="flex items-center gap-2">
+                              <PhaseCompletionCircle items={phase.checklistItems} size="sm" />
+                              <span className="text-sm text-gray-700">{phase.displayName}</span>
+                            </div>
                             <div className="flex flex-wrap items-center gap-2">
                               {businessDays !== null && (
                                 <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-800">
@@ -712,8 +716,11 @@ export default function ClientDetail() {
 
                     return (
                     <div key={phase.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
-                        <h5 className="font-medium text-gray-900">{phase.displayName}</h5>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3">
+                          <PhaseCompletionCircle items={phase.checklistItems} size="sm" />
+                          <h5 className="font-medium text-gray-900">{phase.displayName}</h5>
+                        </div>
                         <div className="flex flex-wrap items-center gap-2">
                           {businessDays !== null && (
                             <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-800">
