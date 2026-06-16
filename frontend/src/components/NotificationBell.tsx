@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Bell, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { notificationApi } from '../api';
 import { Notification } from '../types';
@@ -7,6 +7,7 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -14,6 +15,36 @@ export default function NotificationBell() {
     const interval = window.setInterval(loadNotifications, 60000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updatePosition = () => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const margin = 16;
+      const width = Math.min(320, window.innerWidth - margin * 2);
+      const left = Math.min(
+        Math.max(rect.right - width, margin),
+        window.innerWidth - width - margin
+      );
+
+      setDropdownStyle({
+        left,
+        top: rect.bottom + 8,
+        width
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -74,7 +105,10 @@ export default function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-12 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl md:left-auto md:right-0">
+        <div
+          className="fixed z-50 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+          style={dropdownStyle}
+        >
           <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
             <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
             {unreadCount > 0 && (
