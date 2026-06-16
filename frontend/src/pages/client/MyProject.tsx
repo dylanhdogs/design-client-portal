@@ -60,6 +60,31 @@ export default function MyProject() {
     return 'bg-gray-100 text-gray-800';
   };
 
+  const countBusinessDays = (startDate: string, endDate: Date = new Date()) => {
+    const start = new Date(startDate);
+    if (Number.isNaN(start.getTime())) return 0;
+
+    const current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    let count = 0;
+
+    while (current <= end) {
+      const day = current.getDay();
+      if (day !== 0 && day !== 6) {
+        count += 1;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    return count;
+  };
+
+  const getInProgressBusinessDays = (phase: ProjectPhase) => {
+    if (phase.status !== 'IN_PROGRESS') return null;
+    const startedAt = phase.startDate || phase.createdAt;
+    return countBusinessDays(startedAt);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -93,6 +118,10 @@ export default function MyProject() {
       {/* Phases */}
       <div className="space-y-4 mb-6">
         {project.phases?.map((phase: ProjectPhase) => (
+          (() => {
+            const businessDays = getInProgressBusinessDays(phase);
+
+            return (
           <div key={phase.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <button
               onClick={() => togglePhase(phase.id)}
@@ -109,7 +138,12 @@ export default function MyProject() {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 self-start sm:self-center">
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                {businessDays !== null && (
+                  <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800">
+                    {businessDays} business {businessDays === 1 ? 'day' : 'days'} in progress
+                  </span>
+                )}
                 <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(phase.status)}`}>
                   {phase.status.replace('_', ' ')}
                 </span>
@@ -136,6 +170,8 @@ export default function MyProject() {
               </div>
             )}
           </div>
+            );
+          })()
         ))}
       </div>
 

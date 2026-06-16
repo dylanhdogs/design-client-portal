@@ -115,7 +115,8 @@ export async function createPoolProjectWithPhases(clientId: string, data: {
         displayName: template.displayName,
         order: template.order,
         description: template.description,
-        status: template.order === 1 ? 'IN_PROGRESS' : 'NOT_STARTED'
+        status: template.order === 1 ? 'IN_PROGRESS' : 'NOT_STARTED',
+        startDate: template.order === 1 ? new Date() : null
       }
     });
 
