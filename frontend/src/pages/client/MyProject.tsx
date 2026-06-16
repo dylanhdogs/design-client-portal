@@ -165,6 +165,12 @@ export default function MyProject() {
 
   if (!project) return null;
 
+  const visiblePhases = project.phases?.filter((phase) => (
+    phase.status === 'COMPLETED' ||
+    phase.status === 'IN_PROGRESS' ||
+    phase.order === project.currentPhase
+  ));
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">My Project Details</h1>
@@ -178,7 +184,7 @@ export default function MyProject() {
 
       {/* Phases */}
       <div className="space-y-4 mb-6">
-        {project.phases?.map((phase: ProjectPhase) => (
+        {visiblePhases?.map((phase: ProjectPhase) => (
           (() => {
             const businessDays = getInProgressBusinessDays(phase);
             const showReminder = shouldShowPhaseReminder(phase);

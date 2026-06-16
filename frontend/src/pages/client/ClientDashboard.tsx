@@ -76,7 +76,9 @@ export default function ClientDashboard() {
             interactive
             onPhaseClick={(order: number) => {
               const phase = project.phases?.find((p: { order: number }) => p.order === order);
-              if (phase) navigate(`/my-project/phase/${phase.id}`);
+              if (phase && (phase.status === 'COMPLETED' || phase.status === 'IN_PROGRESS' || phase.order === project.currentPhase)) {
+                navigate(`/my-project/phase/${phase.id}?phase=${phase.id}`);
+              }
             }}
           />
         )}
