@@ -42,6 +42,13 @@ router.get('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next
             documents: true,
             communications: true
           }
+        },
+        poolProject: {
+          include: {
+            phases: {
+              orderBy: { order: 'asc' }
+            }
+          }
         }
       }
     });

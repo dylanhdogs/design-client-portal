@@ -41,13 +41,27 @@ export default function Clients() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return 'bg-green-100 text-green-800';
-      case 'LEAD': return 'bg-yellow-100 text-yellow-800';
-      case 'INACTIVE': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const getPhaseColor = (status?: string) => {
+    if (status === 'COMPLETED') return 'bg-green-100 text-green-800';
+    if (status === 'IN_PROGRESS') return 'bg-blue-100 text-blue-800';
+    if (status === 'NOT_STARTED') return 'bg-gray-100 text-gray-700';
+    return 'bg-amber-100 text-amber-800';
+  };
+
+  const getCurrentPhase = (client: Client) => {
+    const phases = client.poolProject?.phases || [];
+    const currentPhase = phases.find((phase) => phase.order === client.poolProject?.currentPhase)
+      || phases.find((phase) => phase.status === 'IN_PROGRESS');
+
+    if (!client.poolProject) {
+      return { label: 'No project', status: undefined };
     }
+
+    if (!currentPhase) {
+      return { label: client.poolProject.status || 'Project created', status: undefined };
+    }
+
+    return { label: currentPhase.displayName, status: currentPhase.status };
   };
 
   return (
@@ -84,7 +98,7 @@ export default function Clients() {
             onChange={(e) => setStatus(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
           >
-            <option value="">All Statuses</option>
+            <option value="">All Client Statuses</option>
             <option value="LEAD">Lead</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
@@ -101,7 +115,10 @@ export default function Clients() {
         ) : (
           <>
           <div className="md:hidden divide-y divide-gray-200">
-            {clients.map((client) => (
+            {clients.map((client) => {
+              const currentPhase = getCurrentPhase(client);
+
+              return (
               <div key={client.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
@@ -118,11 +135,10 @@ export default function Clients() {
                       <p className="text-sm text-gray-500 break-words">{client.company || 'No company'}</p>
                     </div>
                   </div>
-                  <span className={`shrink-0 inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(client.status)}`}>
-                    {client.status}
-                  </span>
                 </div>
                 <div className="mt-3 text-sm text-gray-500 space-y-1">
+                  <p className="break-words"><span className="font-medium text-gray-700">Project Address:</span> {client.address || 'No address'}</p>
+                  <p><span className="font-medium text-gray-700">Phase:</span> <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${getPhaseColor(currentPhase.status)}`}>{currentPhase.label}</span></p>
                   <p className="break-all">{client.email || 'No email'}</p>
                   <p>{client.phone || 'No phone'}</p>
                 </div>
@@ -152,7 +168,8 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
             {clients.length === 0 && (
               <div className="text-center py-10 px-4 text-gray-500">
                 <Users className="h-8 w-8 mx-auto mb-2 text-gray-300" />
@@ -168,14 +185,18 @@ export default function Clients() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project Address</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phase</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activities</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {clients.map((client) => (
+                {clients.map((client) => {
+                  const currentPhase = getCurrentPhase(client);
+
+                  return (
                   <tr key={client.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -193,13 +214,16 @@ export default function Clients() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{client.company || '-'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
+                      <span className="line-clamp-2">{client.address || '-'}</span>
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       <div>{client.email || '-'}</div>
                       <div>{client.phone || '-'}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(client.status)}`}>
-                        {client.status}
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPhaseColor(currentPhase.status)}`}>
+                        {currentPhase.label}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
@@ -228,10 +252,11 @@ export default function Clients() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {clients.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                       <Users className="h-8 w-8 mx-auto mb-2 text-gray-300" />
                       <p>No clients found</p>
                       <p className="text-sm mt-1">Try adjusting your search or filters</p>
