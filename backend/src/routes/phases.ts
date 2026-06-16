@@ -209,7 +209,6 @@ router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnCli
       }
     });
 
-    const phase = project.phases.find((phase) => phase.id === phaseId);
     const reviewers = await prisma.user.findMany({
       where: { role: { in: ['ADMIN', 'STAFF'] } },
       select: { id: true }
@@ -218,7 +217,7 @@ router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnCli
     await notifyUsers({
       userIds: reviewers.map((user) => user.id),
       type: 'SUBMITTED',
-      message: `${project.client.name} submitted "${existing.description}" for review in ${phase?.displayName || 'a project phase'}.`,
+      message: 'Checklist item submitted',
       clientId,
       phaseId,
       itemId
@@ -277,15 +276,12 @@ router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'
           }
     });
 
-    const phase = project.phases.find((phase) => phase.id === phaseId);
     const clientUsers = project.client.users.filter((user) => user.role === 'CLIENT');
 
     await notifyUsers({
       userIds: clientUsers.map((user) => user.id),
       type: data.approved ? 'APPROVED' : 'REJECTED',
-      message: data.approved
-        ? `"${existing.description}" was approved in ${phase?.displayName || 'your project phase'}.`
-        : `"${existing.description}" needs revision in ${phase?.displayName || 'your project phase'}. ${data.rejectionReason || 'Please revisit and resubmit.'}`,
+      message: data.approved ? 'Checklist item approved' : 'Checklist item needs revision',
       clientId,
       phaseId,
       itemId

@@ -88,6 +88,14 @@ export default function NotificationBell() {
     return <Clock className="h-4 w-4 text-blue-500" />;
   };
 
+  const getSubject = (notification: Notification) => {
+    if (notification.type === 'SUBMITTED') return 'Checklist item submitted';
+    if (notification.type === 'APPROVED') return 'Checklist item approved';
+    if (notification.type === 'REJECTED') return 'Checklist item needs revision';
+    if (notification.type === 'REMINDER') return 'Checklist reminder';
+    return notification.message;
+  };
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -136,7 +144,7 @@ export default function NotificationBell() {
                 >
                   <div className="mt-0.5 shrink-0">{getIcon(notification.type)}</div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-gray-900">{notification.message}</p>
+                    <p className="text-sm font-medium text-gray-900">{getSubject(notification)}</p>
                     <p className="mt-1 text-xs text-gray-500">
                       {new Date(notification.createdAt).toLocaleString()}
                     </p>
