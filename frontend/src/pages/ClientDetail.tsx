@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { clientApi, consultationApi, documentApi, communicationApi, poolProjectApi, clientUserApi } from '../api';
-import { Client, Consultation, Communication } from '../types';
+import { Client, Consultation, Communication, ProjectPhase } from '../types';
 import { useAuth } from '../context/AuthContext';
 import CreateLoginForm from '../components/CreateLoginForm';
 import PhaseProgressBar from '../components/PhaseProgressBar';
@@ -142,6 +142,31 @@ export default function ClientDetail() {
       case 'IN_PERSON': return <User className="h-4 w-4" />;
       default: return <MessageSquare className="h-4 w-4" />;
     }
+  };
+
+  const countBusinessDays = (startDate: string, endDate: Date = new Date()) => {
+    const start = new Date(startDate);
+    if (Number.isNaN(start.getTime())) return 0;
+
+    const current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    let count = 0;
+
+    while (current <= end) {
+      const day = current.getDay();
+      if (day !== 0 && day !== 6) {
+        count += 1;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    return count;
+  };
+
+  const getInProgressBusinessDays = (phase: ProjectPhase) => {
+    if (phase.status !== 'IN_PROGRESS') return null;
+    const startedAt = phase.startDate || phase.createdAt;
+    return countBusinessDays(startedAt);
   };
 
   if (isLoading) {
@@ -605,9 +630,49 @@ export default function ClientDetail() {
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-2">Phase Status</h4>
                     <div className="space-y-2">
-                      {client.poolProject.phases?.map((phase) => (
-                        <div key={phase.id} className="flex items-center justify-between">
-                          <span className="text-sm text-gray-700">{phase.displayName}</span>
+                      {client.poolProject.phases?.map((phase) => {
+                        const businessDays = getInProgressBusinessDays(phase);
+
+                        return (
+                          <div key={phase.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <span className="text-sm text-gray-700">{phase.displayName}</span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {businessDays !== null && (
+                                <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-800">
+                                  {businessDays} business {businessDays === 1 ? 'day' : 'days'}
+                                </span>
+                              )}
+                              <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
+                                phase.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                                phase.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {phase.status}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Phases with Checklist */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-gray-700">Phase Checklists</h4>
+                  {client.poolProject.phases?.map((phase) => {
+                    const businessDays = getInProgressBusinessDays(phase);
+
+                    return (
+                    <div key={phase.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+                        <h5 className="font-medium text-gray-900">{phase.displayName}</h5>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {businessDays !== null && (
+                            <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-800">
+                              {businessDays} business {businessDays === 1 ? 'day' : 'days'} in progress
+                            </span>
+                          )}
                           <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
                             phase.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
                             phase.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
@@ -616,25 +681,6 @@ export default function ClientDetail() {
                             {phase.status}
                           </span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Phases with Checklist */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-medium text-gray-700">Phase Checklists</h4>
-                  {client.poolProject.phases?.map((phase) => (
-                    <div key={phase.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <h5 className="font-medium text-gray-900">{phase.displayName}</h5>
-                        <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
-                          phase.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                          phase.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {phase.status}
-                        </span>
                       </div>
                       <div className="space-y-2">
                         {phase.checklistItems?.map((item) => (
@@ -651,7 +697,8 @@ export default function ClientDetail() {
                         ))}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
