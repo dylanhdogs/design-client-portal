@@ -17,6 +17,29 @@ const verifyChecklistSchema = z.object({
   rejectionReason: z.string().optional()
 });
 
+const notifyUsers = async (data: {
+  userIds: string[];
+  type: string;
+  message: string;
+  clientId?: string;
+  phaseId?: string;
+  itemId?: string;
+}) => {
+  const uniqueUserIds = Array.from(new Set(data.userIds)).filter(Boolean);
+  if (uniqueUserIds.length === 0) return;
+
+  await prisma.notification.createMany({
+    data: uniqueUserIds.map((userId) => ({
+      userId,
+      type: data.type,
+      message: data.message,
+      clientId: data.clientId || null,
+      phaseId: data.phaseId || null,
+      itemId: data.itemId || null
+    }))
+  });
+};
+
 // List all phases for a project
 router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
@@ -152,7 +175,7 @@ router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnCli
 
     const project = await prisma.poolProject.findUnique({
       where: { clientId },
-      include: { phases: true }
+      include: { client: true, phases: true }
     });
 
     if (!project || !project.phases.some((phase) => phase.id === phaseId)) {
@@ -186,6 +209,21 @@ router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnCli
       }
     });
 
+    const phase = project.phases.find((phase) => phase.id === phaseId);
+    const reviewers = await prisma.user.findMany({
+      where: { role: { in: ['ADMIN', 'STAFF'] } },
+      select: { id: true }
+    });
+
+    await notifyUsers({
+      userIds: reviewers.map((user) => user.id),
+      type: 'SUBMITTED',
+      message: `${project.client.name} submitted "${existing.description}" for review in ${phase?.displayName || 'a project phase'}.`,
+      clientId,
+      phaseId,
+      itemId
+    });
+
     res.json(item);
   } catch (err) {
     next(err);
@@ -201,7 +239,7 @@ router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'
 
     const project = await prisma.poolProject.findUnique({
       where: { clientId },
-      include: { phases: true }
+      include: { client: { include: { users: true } }, phases: true }
     });
 
     if (!project || !project.phases.some((phase) => phase.id === phaseId)) {
@@ -237,6 +275,20 @@ router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'
             verifiedBy: userId,
             rejectionReason: data.rejectionReason || 'Not approved. Please revisit and resubmit.'
           }
+    });
+
+    const phase = project.phases.find((phase) => phase.id === phaseId);
+    const clientUsers = project.client.users.filter((user) => user.role === 'CLIENT');
+
+    await notifyUsers({
+      userIds: clientUsers.map((user) => user.id),
+      type: data.approved ? 'APPROVED' : 'REJECTED',
+      message: data.approved
+        ? `"${existing.description}" was approved in ${phase?.displayName || 'your project phase'}.`
+        : `"${existing.description}" needs revision in ${phase?.displayName || 'your project phase'}. ${data.rejectionReason || 'Please revisit and resubmit.'}`,
+      clientId,
+      phaseId,
+      itemId
     });
 
     res.json(item);

@@ -21,6 +21,7 @@ model User {
   documents      Document[]
   communications Communication[]
   poolNotes      PoolNote[]
+  notifications  Notification[]
   client         Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   @@map("users")
@@ -172,4 +173,20 @@ model PoolNote {
   user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("pool_notes")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String
+  message   String
+  clientId  String?  @map("client_id")
+  phaseId   String?  @map("phase_id")
+  itemId    String?  @map("item_id")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
 }

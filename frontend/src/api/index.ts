@@ -156,3 +156,10 @@ export const clientUserApi = {
     api.post(`/clients/${clientId}/create-login`, data),
   getLoginInfo: (clientId: string) => api.get(`/clients/${clientId}/login-info`)
 };
+
+export const notificationApi = {
+  getAll: () => api.get('/notifications'),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+  markRead: (id: string) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all')
+};

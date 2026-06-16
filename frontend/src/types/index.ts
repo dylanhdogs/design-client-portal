@@ -126,3 +126,15 @@ export interface PoolNote {
   createdAt: string;
   user?: { name: string; role: string };
 }
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'REMINDER' | string;
+  message: string;
+  clientId: string | null;
+  phaseId: string | null;
+  itemId: string | null;
+  isRead: boolean;
+  createdAt: string;
+}

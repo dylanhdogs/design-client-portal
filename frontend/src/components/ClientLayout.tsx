@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, FileText, MessageSquare, LogOut } from 'lucide-react';
 import Logo from './Logo';
+import NotificationBell from './NotificationBell';
 
 export default function ClientLayout() {
   const { user, logout } = useAuth();
@@ -16,7 +17,10 @@ export default function ClientLayout() {
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-blue-900 text-white flex flex-col md:min-h-screen">
         <div className="p-4 md:p-6 border-b border-blue-800">
-          <Logo size="sm" />
+          <div className="flex items-center justify-between gap-3">
+            <Logo size="sm" />
+            <NotificationBell />
+          </div>
         </div>
 
         <nav className="flex md:flex-1 gap-2 overflow-x-auto p-3 md:p-4 md:block md:space-y-1">

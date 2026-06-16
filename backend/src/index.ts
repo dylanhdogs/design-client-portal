@@ -12,6 +12,7 @@ import myProjectRoutes from './routes/myProject';
 import phaseRoutes from './routes/phases';
 import poolNotesRoutes from './routes/poolNotes';
 import clientUserRoutes from './routes/clientUsers';
+import notificationRoutes from './routes/notifications';
 import { errorHandler } from './utils/errors';
 
 dotenv.config();
@@ -34,6 +35,7 @@ app.use('/api/clients/:clientId/project/phases', phaseRoutes);
 app.use('/api/clients/:clientId/project/notes', poolNotesRoutes);
 app.use('/api/clients/:clientId', clientUserRoutes);
 app.use('/api/my-project', myProjectRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
