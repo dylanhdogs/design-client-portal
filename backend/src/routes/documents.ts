@@ -7,6 +7,7 @@ import { AppError } from '../utils/errors';
 import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
 import { upload } from '../middleware/upload';
 import { getPaginationParams, getPaginationResult } from '../utils/pagination';
+import { logActivity } from '../utils/activity';
 
 const router = express.Router({ mergeParams: true });
 
@@ -58,6 +59,8 @@ router.post('/', authenticate, restrictToOwnClient, upload.single('file'), async
         description: description || null
       }
     });
+
+    logActivity(userId, 'CREATE', 'Document', document.id, { originalName: document.originalName });
     
     res.status(201).json(document);
   } catch (err) {
@@ -114,6 +117,7 @@ router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res
       data: { deletedAt: new Date() }
     });
 
+    logActivity((req as any).user.id, 'DELETE', 'Document', id);
     res.json({ message: 'Document deleted successfully.' });
   } catch (err) {
     next(err);
@@ -131,6 +135,7 @@ router.post('/:id/restore', authenticate, authorize('ADMIN', 'STAFF'), async (re
       data: { deletedAt: null }
     });
 
+    logActivity((req as any).user.id, 'RESTORE', 'Document', id);
     res.json({ message: 'Document restored successfully.' });
   } catch (err) {
     next(err);

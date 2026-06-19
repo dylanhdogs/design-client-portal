@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
 import { getPaginationParams, getPaginationResult } from '../utils/pagination';
+import { logActivity } from '../utils/activity';
 
 const router = express.Router({ mergeParams: true });
 
@@ -58,6 +59,8 @@ router.post('/', authenticate, restrictToOwnClient, async (req, res, next) => {
         date: data.date ? new Date(data.date) : new Date()
       }
     });
+
+    logActivity(userId, 'CREATE', 'Communication', communication.id, { subject: communication.subject });
     
     res.status(201).json(communication);
   } catch (err) {
@@ -96,6 +99,7 @@ router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res
       data: { deletedAt: new Date() }
     });
 
+    logActivity((req as any).user.id, 'DELETE', 'Communication', id);
     res.json({ message: 'Communication deleted successfully.' });
   } catch (err) {
     next(err);
@@ -113,6 +117,7 @@ router.post('/:id/restore', authenticate, authorize('ADMIN', 'STAFF'), async (re
       data: { deletedAt: null }
     });
 
+    logActivity((req as any).user.id, 'RESTORE', 'Communication', id);
     res.json({ message: 'Communication restored successfully.' });
   } catch (err) {
     next(err);

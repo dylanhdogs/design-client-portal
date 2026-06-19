@@ -23,6 +23,7 @@ model User {
   documents      Document[]
   communications Communication[]
   poolNotes      PoolNote[]
+  activityLogs   ActivityLog[]
   notifications  Notification[]
   client         Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
@@ -190,6 +191,23 @@ model PoolNote {
   @@index([projectId])
   @@index([userId])
   @@map("pool_notes")
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  details    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
 }
 
 model Notification {

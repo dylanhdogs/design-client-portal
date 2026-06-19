@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
 import { getPaginationParams, getPaginationResult } from '../utils/pagination';
+import { logActivity } from '../utils/activity';
 
 const router = express.Router();
 
@@ -130,6 +131,8 @@ router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, nex
         notes: data.notes || null
       }
     });
+
+    logActivity((req as any).user.id, 'CREATE', 'Client', client.id, { name: client.name });
     
     res.status(201).json(client);
   } catch (err) {
@@ -153,6 +156,8 @@ router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, n
         notes: data.notes || null
       }
     });
+
+    logActivity((req as any).user.id, 'UPDATE', 'Client', id, { name: client.name });
     
     res.json(client);
   } catch (err) {
@@ -171,6 +176,7 @@ router.delete('/:id', authenticate, authorize('ADMIN'), async (req, res, next) =
       data: { deletedAt: new Date() }
     });
 
+    logActivity((req as any).user.id, 'DELETE', 'Client', id);
     res.json({ message: 'Client deleted successfully.' });
   } catch (err) {
     next(err);
@@ -188,6 +194,7 @@ router.post('/:id/restore', authenticate, authorize('ADMIN'), async (req, res, n
       data: { deletedAt: null }
     });
 
+    logActivity((req as any).user.id, 'RESTORE', 'Client', id);
     res.json({ message: 'Client restored successfully.' });
   } catch (err) {
     next(err);

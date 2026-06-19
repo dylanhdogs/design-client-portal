@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize } from '../middleware/auth';
 import { getPaginationParams, getPaginationResult } from '../utils/pagination';
+import { logActivity } from '../utils/activity';
 
 const router = express.Router({ mergeParams: true });
 
@@ -56,6 +57,8 @@ router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, nex
         status: data.status
       }
     });
+
+    logActivity(userId, 'CREATE', 'Consultation', consultation.id, { title: consultation.title });
     
     res.status(201).json(consultation);
   } catch (err) {
@@ -76,6 +79,8 @@ router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, n
         notes: data.notes || null
       }
     });
+
+    logActivity((req as any).user.id, 'UPDATE', 'Consultation', id, { title: consultation.title });
     
     res.json(consultation);
   } catch (err) {
@@ -94,6 +99,7 @@ router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res
       data: { deletedAt: new Date() }
     });
 
+    logActivity((req as any).user.id, 'DELETE', 'Consultation', id);
     res.json({ message: 'Consultation deleted successfully.' });
   } catch (err) {
     next(err);
@@ -111,6 +117,7 @@ router.post('/:id/restore', authenticate, authorize('ADMIN', 'STAFF'), async (re
       data: { deletedAt: null }
     });
 
+    logActivity((req as any).user.id, 'RESTORE', 'Consultation', id);
     res.json({ message: 'Consultation restored successfully.' });
   } catch (err) {
     next(err);

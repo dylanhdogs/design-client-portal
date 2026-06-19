@@ -35,5 +35,5 @@
 - [x] **Soft deletes** — Client, Document, Communication, Consultation
 - [ ] **Email notifications** — nodemailer + SendGrid/Mailgun
 - [ ] **Client invitation flow** — Email-based onboarding
-- [ ] **Activity / audit log** — Track changes
+- [x] **Activity / audit log** — Track changes on key entities
 - [ ] **Docker setup + CI/CD** — Containerized dev & deploy
