@@ -25,5 +25,6 @@ export const errorHandler = (err: any, req: any, res: any, next: any) => {
     return res.status(400).json({ error: 'Database error.' });
   }
 
-  res.status(500).json({ error: 'Internal server error.' });
+  const isDev = process.env.NODE_ENV !== 'production';
+  res.status(500).json({ error: isDev ? err.message : 'Internal server error.' });
 };
