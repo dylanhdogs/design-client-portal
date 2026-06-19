@@ -5,20 +5,27 @@ import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
 import { upload } from '../middleware/upload';
+import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 
 const router = express.Router({ mergeParams: true });
 
 router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { clientId } = req.params;
+    const pagination = getPaginationParams(req.query);
     
-    const documents = await prisma.document.findMany({
-      where: { clientId },
-      orderBy: { createdAt: 'desc' },
-      include: { user: { select: { name: true } }, consultation: { select: { title: true } } }
-    });
+    const [documents, total] = await Promise.all([
+      prisma.document.findMany({
+        where: { clientId },
+        orderBy: { createdAt: 'desc' },
+        skip: pagination.skip,
+        take: pagination.limit,
+        include: { user: { select: { name: true } }, consultation: { select: { title: true } } }
+      }),
+      prisma.document.count({ where: { clientId } })
+    ]);
     
-    res.json(documents);
+    res.json({ data: documents, pagination: getPaginationResult(total, pagination) });
   } catch (err) {
     next(err);
   }

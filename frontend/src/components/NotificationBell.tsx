@@ -67,7 +67,7 @@ export default function NotificationBell() {
         notificationApi.getAll(),
         notificationApi.getUnreadCount()
       ]);
-      setNotifications(listRes.data);
+      setNotifications(listRes.data.data);
       setUnreadCount(countRes.data.count);
     } catch (err) {
       console.error(err);

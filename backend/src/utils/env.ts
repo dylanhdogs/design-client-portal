@@ -1,3 +1,7 @@
-export const getJwtSecret = () => {
-  return process.env.JWT_SECRET || 'construction-portal-jwt-secret-key-2026';
+export const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set.');
+  }
+  return secret;
 };

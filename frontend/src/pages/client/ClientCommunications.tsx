@@ -26,7 +26,7 @@ export default function ClientCommunications() {
   const loadCommunications = async (cid: string) => {
     try {
       const res = await communicationApi.getAll(cid);
-      setCommunications(res.data);
+      setCommunications(res.data.data);
     } catch (err) {
       console.error(err);
     } finally {

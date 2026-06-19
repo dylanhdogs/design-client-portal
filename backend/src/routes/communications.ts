@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
+import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 
 const router = express.Router({ mergeParams: true });
 
@@ -17,14 +18,20 @@ const communicationSchema = z.object({
 router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { clientId } = req.params;
+    const pagination = getPaginationParams(req.query);
     
-    const communications = await prisma.communication.findMany({
-      where: { clientId },
-      orderBy: { date: 'desc' },
-      include: { user: { select: { name: true } } }
-    });
+    const [communications, total] = await Promise.all([
+      prisma.communication.findMany({
+        where: { clientId },
+        orderBy: { date: 'desc' },
+        skip: pagination.skip,
+        take: pagination.limit,
+        include: { user: { select: { name: true } } }
+      }),
+      prisma.communication.count({ where: { clientId } })
+    ]);
     
-    res.json(communications);
+    res.json({ data: communications, pagination: getPaginationResult(total, pagination) });
   } catch (err) {
     next(err);
   }

@@ -20,7 +20,7 @@ export default function ClientDocuments() {
   const loadDocuments = async (cid: string) => {
     try {
       const res = await documentApi.getAll(cid);
-      setDocuments(res.data);
+      setDocuments(res.data.data);
     } catch (err) {
       console.error(err);
     } finally {

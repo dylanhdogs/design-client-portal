@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { documentApi, UPLOADS_BASE_URL } from '../api';
+import { documentApi } from '../api';
 import { Document } from '../types';
 import { FileText, Upload, X, Download, Eye, Trash2 } from 'lucide-react';
 
@@ -16,6 +16,7 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
   const [description, setDescription] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -69,8 +70,22 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
     }
   };
 
-  const handlePreview = (doc: Document) => {
+  const handlePreview = async (doc: Document) => {
     setPreviewDoc(doc);
+    try {
+      const { url } = await documentApi.getViewBlob(doc.id);
+      setPreviewBlobUrl(url);
+    } catch {
+      setPreviewBlobUrl(null);
+    }
+  };
+
+  const handleClosePreview = () => {
+    if (previewBlobUrl) {
+      window.URL.revokeObjectURL(previewBlobUrl);
+    }
+    setPreviewBlobUrl(null);
+    setPreviewDoc(null);
   };
 
   const formatFileSize = (bytes: number) => {
@@ -84,16 +99,18 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
   const isImage = (mimeType: string) => mimeType.startsWith('image/');
   const isPdf = (mimeType: string) => mimeType === 'application/pdf';
 
-  const getUploadUrl = (filename: string) => {
-    const base = UPLOADS_BASE_URL.endsWith('/') ? UPLOADS_BASE_URL.slice(0, -1) : UPLOADS_BASE_URL;
-    return `${base}/${filename}`;
-  };
-
   const getPreviewContent = (doc: Document) => {
+    if (!previewBlobUrl) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      );
+    }
     if (isImage(doc.mimeType)) {
       return (
         <img
-          src={getUploadUrl(doc.filename)}
+          src={previewBlobUrl}
           alt={doc.originalName}
           className="max-w-full max-h-[70vh] object-contain"
         />
@@ -101,7 +118,7 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
     } else if (isPdf(doc.mimeType)) {
       return (
         <iframe
-          src={getUploadUrl(doc.filename)}
+          src={previewBlobUrl}
           className="w-full h-[70vh]"
           title={doc.originalName}
         />
@@ -264,7 +281,7 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
                   Download
                 </button>
                 <button
-                  onClick={() => setPreviewDoc(null)}
+                  onClick={handleClosePreview}
                   className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="h-5 w-5" />

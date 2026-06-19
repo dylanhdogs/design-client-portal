@@ -2,19 +2,26 @@ import express from 'express';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate } from '../middleware/auth';
+import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 
 const router = express.Router();
 
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const userId = (req as any).user.id;
-    const notifications = await prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 25
-    });
+    const pagination = getPaginationParams(req.query);
 
-    res.json(notifications);
+    const [notifications, total] = await Promise.all([
+      prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip: pagination.skip,
+        take: pagination.limit
+      }),
+      prisma.notification.count({ where: { userId } })
+    ]);
+
+    res.json({ data: notifications, pagination: getPaginationResult(total, pagination) });
   } catch (err) {
     next(err);
   }

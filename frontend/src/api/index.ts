@@ -2,7 +2,6 @@ import axios from 'axios';
 import { Client, Consultation, Communication } from '../types';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-export const UPLOADS_BASE_URL = import.meta.env.VITE_UPLOADS_URL || '/uploads';
 
 const getApiUrl = (path: string) => {
   const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
@@ -44,7 +43,13 @@ export const authApi = {
   register: (data: { email: string; password: string; name: string; role: string }) =>
     api.post('/auth/register', data),
   me: () => api.get('/auth/me'),
-  getUsers: () => api.get('/auth/users')
+  getUsers: () => api.get('/auth/users'),
+  updateProfile: (data: { name?: string; email?: string; currentPassword?: string; newPassword?: string }) =>
+    api.put('/auth/me', data),
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { token, newPassword })
 };
 
 export const clientApi = {
@@ -63,6 +68,11 @@ export const consultationApi = {
   update: (clientId: string, id: string, data: Partial<Consultation>) =>
     api.put(`/clients/${clientId}/consultations/${id}`, data),
   delete: (clientId: string, id: string) => api.delete(`/clients/${clientId}/consultations/${id}`)
+};
+
+const getFileUrl = (path: string) => {
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  return `${base}${path}`;
 };
 
 export const documentApi = {
@@ -90,6 +100,18 @@ export const documentApi = {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+  },
+  getViewBlob: async (id: string): Promise<{ blob: Blob; url: string }> => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(getFileUrl(`/files/${id}`), {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!response.ok) throw new Error('Failed to load file');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    return { blob, url };
   }
 };
 

@@ -21,8 +21,8 @@ export default function Dashboard() {
   const loadClients = async () => {
     try {
       const res = await clientApi.getAll();
-      setClients(res.data);
-      const data = res.data;
+      setClients(res.data.data);
+      const data = res.data.data;
       setStats({
         total: data.length,
         active: data.filter((c: Client) => c.status === 'ACTIVE').length,

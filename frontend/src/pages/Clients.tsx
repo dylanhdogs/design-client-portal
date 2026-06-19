@@ -23,7 +23,7 @@ export default function Clients() {
         status: status || undefined,
         search: search || undefined
       });
-      setClients(res.data);
+      setClients(res.data.data);
     } catch (err) {
       console.error(err);
     } finally {

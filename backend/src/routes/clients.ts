@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
+import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ const updateClientSchema = clientSchema.partial();
 router.get('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
   try {
     const { status, search } = req.query;
+    const pagination = getPaginationParams(req.query);
     
     const where: any = {};
     if (status) where.status = status as string;
@@ -32,28 +34,33 @@ router.get('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next
       ];
     }
     
-    const clients = await prisma.client.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: {
-          select: {
-            consultations: true,
-            documents: true,
-            communications: true
-          }
-        },
-        poolProject: {
-          include: {
-            phases: {
-              orderBy: { order: 'asc' }
+    const [clients, total] = await Promise.all([
+      prisma.client.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: pagination.skip,
+        take: pagination.limit,
+        include: {
+          _count: {
+            select: {
+              consultations: true,
+              documents: true,
+              communications: true
+            }
+          },
+          poolProject: {
+            include: {
+              phases: {
+                orderBy: { order: 'asc' }
+              }
             }
           }
         }
-      }
-    });
+      }),
+      prisma.client.count({ where })
+    ]);
     
-    res.json(clients);
+    res.json({ data: clients, pagination: getPaginationResult(total, pagination) });
   } catch (err) {
     next(err);
   }

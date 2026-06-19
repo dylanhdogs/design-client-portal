@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
 import authRoutes from './routes/auth';
@@ -13,6 +14,7 @@ import phaseRoutes from './routes/phases';
 import poolNotesRoutes from './routes/poolNotes';
 import clientUserRoutes from './routes/clientUsers';
 import notificationRoutes from './routes/notifications';
+import fileRoutes from './routes/files';
 import { errorHandler } from './utils/errors';
 
 dotenv.config();
@@ -20,10 +22,24 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      frameSrc: ["'self'", "blob:"],
+      objectSrc: ["'none'"],
+    },
+  },
+}));
 app.use(cors());
 app.use(express.json());
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/api/files', fileRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
