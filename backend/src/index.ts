@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
 import authRoutes from './routes/auth';
@@ -36,6 +37,7 @@ app.use(helmet({
     },
   },
 }));
+app.use(morgan('short'));
 app.use(cors());
 app.use(express.json());
 

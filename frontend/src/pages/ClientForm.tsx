@@ -21,6 +21,7 @@ export default function ClientForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isEditing && id) {
@@ -50,9 +51,37 @@ export default function ClientForm() {
     }
   };
 
+  const validateField = (name: string, value: string): string => {
+    if (name === 'name' && !value.trim()) return 'Name is required.';
+    if (name === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Invalid email format.';
+    return '';
+  };
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {};
+    Object.entries(form).forEach(([name, value]) => {
+      const error = validateField(name, value);
+      if (error) errors[name] = error;
+    });
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      const error = validateField(name, value);
+      if (error) next[name] = error;
+      else delete next[name];
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!validate()) return;
     setIsSaving(true);
 
     try {
@@ -75,10 +104,15 @@ export default function ClientForm() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setForm(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      const error = validateField(name, value);
+      if (error) next[name] = error;
+      else delete next[name];
+      return next;
+    });
   };
 
   if (isLoading) {
@@ -121,9 +155,11 @@ export default function ClientForm() {
               name="name"
               value={form.name}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              onBlur={handleBlur}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${fieldErrors.name ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
               required
             />
+            {fieldErrors.name && <p className="mt-1 text-xs text-red-600">{fieldErrors.name}</p>}
           </div>
 
           <div>
@@ -145,8 +181,10 @@ export default function ClientForm() {
                 name="email"
                 value={form.email}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                onBlur={handleBlur}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${fieldErrors.email ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
               />
+              {fieldErrors.email && <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>

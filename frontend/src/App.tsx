@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import ClientLayout from './components/ClientLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -13,6 +14,7 @@ import ClientDashboard from './pages/client/ClientDashboard';
 import MyProject from './pages/client/MyProject';
 import ClientDocuments from './pages/client/ClientDocuments';
 import ClientCommunications from './pages/client/ClientCommunications';
+import NotFound from './pages/NotFound';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -49,7 +51,9 @@ function App() {
             path="/"
             element={
               <PrivateRoute>
-                <RoleBasedLayout />
+                <ErrorBoundary>
+                  <RoleBasedLayout />
+                </ErrorBoundary>
               </PrivateRoute>
             }
           >
@@ -65,7 +69,9 @@ function App() {
             <Route path="my-project/phase/:id" element={<MyProject />} />
             <Route path="my-documents" element={<ClientDocuments />} />
             <Route path="my-communications" element={<ClientCommunications />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

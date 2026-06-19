@@ -81,6 +81,8 @@ export const documentApi = {
     api.post(`/clients/${clientId}/documents`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
+  update: (clientId: string, id: string, data: { description?: string }) =>
+    api.put(`/clients/${clientId}/documents/${id}`, data),
   delete: (clientId: string, id: string) =>
     api.delete(`/clients/${clientId}/documents/${id}`),
   download: async (clientId: string, id: string, filename: string) => {

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import express from 'express';
 import path from 'path';
 import { z } from 'zod';
@@ -79,10 +80,36 @@ router.get('/:id/download', authenticate, async (req, res, next) => {
   }
 });
 
+router.put('/:id', authenticate, restrictToOwnClient, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { description } = z.object({ description: z.string().optional() }).parse(req.body);
+
+    const doc = await prisma.document.findUnique({ where: { id } });
+    if (!doc) throw new AppError('Document not found.', 404);
+
+    const updated = await prisma.document.update({
+      where: { id },
+      data: { description: description || null }
+    });
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
   try {
     const { id } = req.params;
+    const doc = await prisma.document.findUnique({ where: { id } });
+    if (!doc) throw new AppError('Document not found.', 404);
+
     await prisma.document.delete({ where: { id } });
+
+    const filePath = path.join(process.cwd(), 'uploads', doc.filename);
+    fs.unlink(filePath, () => {});
+
     res.json({ message: 'Document deleted successfully.' });
   } catch (err) {
     next(err);

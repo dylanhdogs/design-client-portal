@@ -22,12 +22,12 @@
 
 ## P2 — Medium (important UX & functionality)
 
-- [ ] **React Error Boundary** — Prevent white-screen crashes
-- [ ] **Inline form validation** — Client-side field validation
-- [ ] **Catch-all 404 route** — React Router fallback
-- [ ] **Clean up orphaned files** — Delete disk files when document record is deleted
-- [ ] **Document metadata editing** — Allow editing description after upload
-- [ ] **Request logging** — Add `morgan` middleware
+- [x] **React Error Boundary** — Prevent white-screen crashes
+- [x] **Inline form validation** — Client-side field validation
+- [x] **Catch-all 404 route** — React Router fallback
+- [x] **Clean up orphaned files** — Delete disk files when document record is deleted
+- [x] **Document metadata editing** — Allow editing description after upload
+- [x] **Request logging** — Add `morgan` middleware
 
 ## P3 — Lower (nice-to-have / future)
 
