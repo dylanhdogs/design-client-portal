@@ -18,17 +18,21 @@ const communicationSchema = z.object({
 router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { clientId } = req.params;
+    const { includeDeleted } = req.query;
     const pagination = getPaginationParams(req.query);
+    
+    const where: any = { clientId };
+    if (includeDeleted !== 'true') where.deletedAt = null;
     
     const [communications, total] = await Promise.all([
       prisma.communication.findMany({
-        where: { clientId },
+        where,
         orderBy: { date: 'desc' },
         skip: pagination.skip,
         take: pagination.limit,
         include: { user: { select: { name: true } } }
       }),
-      prisma.communication.count({ where: { clientId } })
+      prisma.communication.count({ where })
     ]);
     
     res.json({ data: communications, pagination: getPaginationResult(total, pagination) });
@@ -84,8 +88,32 @@ router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, n
 router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    await prisma.communication.delete({ where: { id } });
+    const comm = await prisma.communication.findFirst({ where: { id, deletedAt: null } });
+    if (!comm) throw new AppError('Communication not found.', 404);
+
+    await prisma.communication.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    });
+
     res.json({ message: 'Communication deleted successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/restore', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const comm = await prisma.communication.findFirst({ where: { id, deletedAt: { not: null } } });
+    if (!comm) throw new AppError('Deleted communication not found.', 404);
+
+    await prisma.communication.update({
+      where: { id },
+      data: { deletedAt: null }
+    });
+
+    res.json({ message: 'Communication restored successfully.' });
   } catch (err) {
     next(err);
   }

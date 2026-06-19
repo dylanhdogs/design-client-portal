@@ -21,10 +21,11 @@ const updateClientSchema = clientSchema.partial();
 
 router.get('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
   try {
-    const { status, search } = req.query;
+    const { status, search, includeDeleted } = req.query;
     const pagination = getPaginationParams(req.query);
     
     const where: any = {};
+    if (includeDeleted !== 'true') where.deletedAt = null;
     if (status) where.status = status as string;
     if (search) {
       where.OR = [
@@ -69,9 +70,13 @@ router.get('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next
 router.get('/:id', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { includeDeleted } = req.query;
     
-    const client = await prisma.client.findUnique({
-      where: { id },
+    const client = await prisma.client.findFirst({
+      where: {
+        id,
+        ...(includeDeleted !== 'true' ? { deletedAt: null } : {})
+      },
       include: {
         consultations: {
           orderBy: { date: 'desc' },
@@ -158,8 +163,32 @@ router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, n
 router.delete('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    await prisma.client.delete({ where: { id } });
+    const client = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+    if (!client) throw new AppError('Client not found.', 404);
+
+    await prisma.client.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    });
+
     res.json({ message: 'Client deleted successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/restore', authenticate, authorize('ADMIN'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const client = await prisma.client.findFirst({ where: { id, deletedAt: { not: null } } });
+    if (!client) throw new AppError('Deleted client not found.', 404);
+
+    await prisma.client.update({
+      where: { id },
+      data: { deletedAt: null }
+    });
+
+    res.json({ message: 'Client restored successfully.' });
   } catch (err) {
     next(err);
   }

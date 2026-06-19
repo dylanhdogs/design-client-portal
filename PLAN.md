@@ -32,7 +32,7 @@
 ## P3 — Lower (nice-to-have / future)
 
 - [ ] **Tests** — Backend API integration tests
-- [ ] **Soft deletes** — Client, Document, Communication
+- [x] **Soft deletes** — Client, Document, Communication, Consultation
 - [ ] **Email notifications** — nodemailer + SendGrid/Mailgun
 - [ ] **Client invitation flow** — Email-based onboarding
 - [ ] **Activity / audit log** — Track changes

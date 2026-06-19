@@ -13,17 +13,21 @@ const router = express.Router({ mergeParams: true });
 router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { clientId } = req.params;
+    const { includeDeleted } = req.query;
     const pagination = getPaginationParams(req.query);
+    
+    const where: any = { clientId };
+    if (includeDeleted !== 'true') where.deletedAt = null;
     
     const [documents, total] = await Promise.all([
       prisma.document.findMany({
-        where: { clientId },
+        where,
         orderBy: { createdAt: 'desc' },
         skip: pagination.skip,
         take: pagination.limit,
         include: { user: { select: { name: true } }, consultation: { select: { title: true } } }
       }),
-      prisma.document.count({ where: { clientId } })
+      prisma.document.count({ where })
     ]);
     
     res.json({ data: documents, pagination: getPaginationResult(total, pagination) });
@@ -102,15 +106,32 @@ router.put('/:id', authenticate, restrictToOwnClient, async (req, res, next) => 
 router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const doc = await prisma.document.findUnique({ where: { id } });
+    const doc = await prisma.document.findFirst({ where: { id, deletedAt: null } });
     if (!doc) throw new AppError('Document not found.', 404);
 
-    await prisma.document.delete({ where: { id } });
-
-    const filePath = path.join(process.cwd(), 'uploads', doc.filename);
-    fs.unlink(filePath, () => {});
+    await prisma.document.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    });
 
     res.json({ message: 'Document deleted successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/restore', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const doc = await prisma.document.findFirst({ where: { id, deletedAt: { not: null } } });
+    if (!doc) throw new AppError('Deleted document not found.', 404);
+
+    await prisma.document.update({
+      where: { id },
+      data: { deletedAt: null }
+    });
+
+    res.json({ message: 'Document restored successfully.' });
   } catch (err) {
     next(err);
   }

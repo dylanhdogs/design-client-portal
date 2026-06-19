@@ -17,17 +17,21 @@ const consultationSchema = z.object({
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const { clientId } = req.params;
+    const { includeDeleted } = req.query;
     const pagination = getPaginationParams(req.query);
+    
+    const where: any = { clientId };
+    if (includeDeleted !== 'true') where.deletedAt = null;
     
     const [consultations, total] = await Promise.all([
       prisma.consultation.findMany({
-        where: { clientId },
+        where,
         orderBy: { date: 'desc' },
         skip: pagination.skip,
         take: pagination.limit,
         include: { user: { select: { name: true } } }
       }),
-      prisma.consultation.count({ where: { clientId } })
+      prisma.consultation.count({ where })
     ]);
     
     res.json({ data: consultations, pagination: getPaginationResult(total, pagination) });
@@ -82,8 +86,32 @@ router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, n
 router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    await prisma.consultation.delete({ where: { id } });
+    const cons = await prisma.consultation.findFirst({ where: { id, deletedAt: null } });
+    if (!cons) throw new AppError('Consultation not found.', 404);
+
+    await prisma.consultation.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    });
+
     res.json({ message: 'Consultation deleted successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/restore', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const cons = await prisma.consultation.findFirst({ where: { id, deletedAt: { not: null } } });
+    if (!cons) throw new AppError('Deleted consultation not found.', 404);
+
+    await prisma.consultation.update({
+      where: { id },
+      data: { deletedAt: null }
+    });
+
+    res.json({ message: 'Consultation restored successfully.' });
   } catch (err) {
     next(err);
   }
