@@ -48,6 +48,7 @@ model Client {
   communications Communication[]
   poolProject    PoolProject?
   users          User[]
+  invitations    Invitation[]
 
   @@map("clients")
 }
@@ -191,6 +192,23 @@ model PoolNote {
   @@index([projectId])
   @@index([userId])
   @@map("pool_notes")
+}
+
+model Invitation {
+  id         String   @id @default(uuid())
+  email      String
+  clientId   String   @map("client_id")
+  token      String   @unique
+  status     String   @default("PENDING")
+  expiresAt  DateTime @map("expires_at")
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([token])
+  @@map("invitations")
 }
 
 model ActivityLog {

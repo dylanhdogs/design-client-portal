@@ -4,6 +4,7 @@ import { clientApi, consultationApi, documentApi, communicationApi, poolProjectA
 import { Client, Consultation, Communication, ProjectPhase, ChecklistItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import CreateLoginForm from '../components/CreateLoginForm';
+import InviteClientForm from '../components/InviteClientForm';
 import PhaseProgressBar from '../components/PhaseProgressBar';
 import DocumentUpload from '../components/DocumentUpload';
 import PhaseCompletionCircle from '../components/PhaseCompletionCircle';
@@ -23,6 +24,7 @@ export default function ClientDetail() {
   const [activeTab, setActiveTab] = useState<'consultations' | 'documents' | 'communications' | 'poolProject'>('consultations');
   const [error, setError] = useState('');
   const [showCreateLogin, setShowCreateLogin] = useState(false);
+  const [showInviteClient, setShowInviteClient] = useState(false);
   const [hasLogin, setHasLogin] = useState(false);
 
   // Consultation form
@@ -281,6 +283,15 @@ export default function ClientDetail() {
               >
                 <UserPlus className="h-4 w-4" />
                 <span>Create Client Login</span>
+              </button>
+            )}
+            {!hasLogin && (
+              <button
+                onClick={() => setShowInviteClient(true)}
+                className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+              >
+                <UserPlus className="h-4 w-4" />
+                <span>Invite Client</span>
               </button>
             )}
             <Link
@@ -809,6 +820,14 @@ export default function ClientDetail() {
             loadClient();
           }}
           onCancel={() => setShowCreateLogin(false)}
+        />
+      )}
+
+      {/* Invite Client Modal */}
+      {showInviteClient && (
+        <InviteClientForm
+          clientId={client.id}
+          onCancel={() => setShowInviteClient(false)}
         />
       )}
     </div>

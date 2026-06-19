@@ -14,6 +14,7 @@ import ClientDashboard from './pages/client/ClientDashboard';
 import MyProject from './pages/client/MyProject';
 import ClientDocuments from './pages/client/ClientDocuments';
 import ClientCommunications from './pages/client/ClientCommunications';
+import AcceptInvite from './pages/AcceptInvite';
 import NotFound from './pages/NotFound';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -47,6 +48,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/accept-invite" element={<AcceptInvite />} />
           <Route
             path="/"
             element={

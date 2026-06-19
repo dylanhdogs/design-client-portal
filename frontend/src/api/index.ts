@@ -178,7 +178,12 @@ export const poolNoteApi = {
 export const clientUserApi = {
   createLogin: (clientId: string, data: { email: string; password: string; name: string }) =>
     api.post(`/clients/${clientId}/create-login`, data),
-  getLoginInfo: (clientId: string) => api.get(`/clients/${clientId}/login-info`)
+  getLoginInfo: (clientId: string) => api.get(`/clients/${clientId}/login-info`),
+  invite: (clientId: string, data: { email: string }) =>
+    api.post(`/clients/${clientId}/invite`, data),
+  checkInvite: (token: string) => api.get(`/invite/${token}`),
+  acceptInvite: (token: string, data: { name: string; password: string }) =>
+    api.post(`/invite/${token}/accept`, data)
 };
 
 export const notificationApi = {

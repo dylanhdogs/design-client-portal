@@ -17,6 +17,7 @@ import clientUserRoutes from './routes/clientUsers';
 import notificationRoutes from './routes/notifications';
 import fileRoutes from './routes/files';
 import activityRoutes from './routes/activities';
+import invitationRoutes from './routes/invitations';
 import { errorHandler } from './utils/errors';
 
 dotenv.config();
@@ -56,6 +57,7 @@ app.use('/api/clients/:clientId', clientUserRoutes);
 app.use('/api/my-project', myProjectRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/activity', activityRoutes);
+app.use('/api', invitationRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
