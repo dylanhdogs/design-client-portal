@@ -25,8 +25,8 @@ const updateProjectSchema = z.object({
   status: z.string().optional()
 });
 
-// Create pool project for a client (ADMIN/STAFF only)
-router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+// Create pool project for a client (ADMIN only)
+router.post('/', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const { clientId } = req.params;
     const data = projectSchema.parse(req.body);
@@ -48,7 +48,7 @@ router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, nex
   }
 });
 
-// Get pool project for a client (ADMIN/STAFF or CLIENT own)
+// Get pool project for a client (ADMIN or CLIENT own)
 router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { clientId } = req.params;
@@ -81,8 +81,8 @@ router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   }
 });
 
-// Update pool project (ADMIN/STAFF only)
-router.put('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+// Update pool project (ADMIN only)
+router.put('/', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const { clientId } = req.params;
     const data = updateProjectSchema.parse(req.body);

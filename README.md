@@ -2,6 +2,8 @@
 
 A web application for managing construction clients, consultations, documents, and communications.
 
+For step-by-step instructions for administrators and clients, see the [User Guide](USER_GUIDE.md). For the current readiness score, launch priorities, and controlled-pilot criteria, see the [Functional Stabilization Plan](FUNCTIONAL_STABILIZATION_PLAN.md). The task-by-task Hostinger staging and launch sequence is in the [Hostinger Deployment Plan](HOSTINGER_DEPLOYMENT_PLAN.md).
+
 ## Features
 
 - **Client Management**: Create, update, and track client profiles with contact information, status, and notes
@@ -16,8 +18,8 @@ A web application for managing construction clients, consultations, documents, a
 - **Consultation Tracking**: Record and manage consultation sessions with dates, notes, and status
 - **Document Management**: Upload, download, and organize client-related documents (blueprints, contracts, permits, etc.)
 - **Communication Log**: Track all client communications including emails, phone calls, and in-person meetings
-- **Pool Notes**: Separate note stream per pool project that both staff and clients can use
-- **Role-Based Access**: Different user roles (Admin, Staff, Client) with appropriate permissions
+- **Pool Notes**: Separate note stream per pool project that administrators and clients can use
+- **Role-Based Access**: Administrator and client accounts with appropriate permissions
 - **Client Portal**: Dedicated client interface for viewing project progress, uploading documents, logging communications, and adding notes
 - **Dashboard**: Overview of client statistics and recent activity
 
@@ -40,7 +42,7 @@ A web application for managing construction clients, consultations, documents, a
 ## Getting Started
 
 ### Prerequisites
-- Node.js (v18 or higher)
+- Node.js 22.11 or newer within the Node.js 22 LTS line
 - npm
 
 ### Installation
@@ -56,7 +58,7 @@ cd backend
 npm install
 ```
 
-3. Set up the database:
+3. Set up the local demonstration database (development only):
 ```bash
 npm run db:migrate
 npm run db:seed
@@ -88,7 +90,13 @@ npm run dev
 # App: http://localhost:3000
 ```
 
-## Deploying Frontend To Cloudflare Pages
+## Hostinger VPS Deployment
+
+The supported initial production architecture is one Node.js 22 process on a Hostinger VPS, behind Nginx and `systemd`, with SQLite, uploads, backups, and deployment manifests stored outside each source release. Start with the [Hostinger Deployment Plan](HOSTINGER_DEPLOYMENT_PLAN.md), then use the [Hostinger Operations Runbook](docs/HOSTINGER_OPERATIONS_RUNBOOK.md) and files under `deployment/hostinger/`.
+
+Production startup runs preflight checks and database migrations, but never seeds demonstration users. Create the first administrator deliberately with `npm --prefix backend run admin:bootstrap` and protected `BOOTSTRAP_ADMIN_*` environment values.
+
+## Optional Split Frontend Hosting
 
 Cloudflare Pages can host the React/Vite frontend. The current Express + SQLite backend does not run on Cloudflare Pages, so deploy the backend separately first, then point the Pages frontend at that backend URL.
 
@@ -97,7 +105,7 @@ Cloudflare Pages can host the React/Vite frontend. The current Express + SQLite 
 - **Root directory**: `frontend`
 - **Build command**: `npm run build`
 - **Build output directory**: `dist`
-- **Node.js version**: `20` or newer
+- **Node.js version**: Node.js 22 LTS
 
 ### Environment Variables
 
@@ -105,14 +113,13 @@ Set these in Cloudflare Pages under **Settings > Environment variables**:
 
 ```bash
 VITE_API_URL=https://your-backend-domain.com/api
-VITE_UPLOADS_URL=https://your-backend-domain.com/uploads
 ```
 
-For local frontend development, copy `frontend/.env.example` to `frontend/.env` if you want explicit API URLs. If unset, the frontend defaults to `/api` and `/uploads`, which works with the Vite dev proxy and with a same-origin production deployment.
+For local frontend development, copy `frontend/.env.example` to `frontend/.env` if you want an explicit API URL. If unset, the frontend defaults to `/api`, which works with the Vite dev proxy and with the recommended same-origin production deployment. Authenticated files are served through `/api/files/:id`.
 
 ### Backend Hosting Note
 
-Use a Node-capable host for the backend, such as Render, Railway, Fly.io, or a VPS. Make sure the backend allows requests from your Cloudflare Pages domain. The current backend uses permissive CORS by default.
+Use a Node-capable host for the backend. Set `CORS_ORIGINS` to the exact HTTPS frontend origin; unlisted origins are rejected.
 
 For Render, use one of these configurations:
 
@@ -130,7 +137,7 @@ For Render, use one of these configurations:
 
 Do not use the root `npm run build` command for backend-only Render deploys unless you intentionally want to build both backend and frontend.
 
-The backend `npm start` command runs `prisma migrate deploy` and seeds demo accounts before starting Express. This prevents login failures caused by an empty hosted SQLite database.
+The backend `npm start` command validates production configuration and persistent paths, applies migrations without seed data, and starts Express. Bootstrap the first administrator separately; predictable demo credentials must never exist in production.
 
 ### SPA Routing
 
@@ -139,7 +146,6 @@ The backend `npm start` command runs `prisma migrate deploy` and seeds demo acco
 ### Demo Credentials
 
 - **Admin**: `admin@example.com` / `admin123`
-- **Staff**: `staff@example.com` / `staff123`
 - **Client**: `client@example.com` / `client123` (created by admin)
 
 ## API Endpoints
@@ -151,16 +157,16 @@ The backend `npm start` command runs `prisma migrate deploy` and seeds demo acco
 - `GET /api/auth/users` - List all users (Admin only)
 
 ### Clients
-- `GET /api/clients` - List clients (Admin/Staff only)
-- `GET /api/clients/:id` - Get client details (Admin/Staff/Client own)
-- `POST /api/clients` - Create client (Admin/Staff)
-- `PUT /api/clients/:id` - Update client (Admin/Staff)
+- `GET /api/clients` - List clients (Admin only)
+- `GET /api/clients/:id` - Get client details (Admin/Client own)
+- `POST /api/clients` - Create client (Admin only)
+- `PUT /api/clients/:id` - Update client (Admin only)
 - `DELETE /api/clients/:id` - Delete client (Admin)
 
 ### Pool Projects
-- `POST /api/clients/:clientId/project` - Create pool project (Admin/Staff)
-- `GET /api/clients/:clientId/project` - Get pool project (Admin/Staff/Client own)
-- `PUT /api/clients/:clientId/project` - Update project (Admin/Staff)
+- `POST /api/clients/:clientId/project` - Create pool project (Admin only)
+- `GET /api/clients/:clientId/project` - Get pool project (Admin/Client own)
+- `PUT /api/clients/:clientId/project` - Update project (Admin only)
 - `GET /api/my-project` - Get own project (Client only)
 
 ### Phases
@@ -228,7 +234,7 @@ The backend `npm start` command runs `prisma migrate deploy` and seeds demo acco
 │   │   ├── api/
 │   │   │   └── index.ts        # API client functions
 │   │   ├── components/
-│   │   │   ├── Layout.tsx        # Admin/Staff layout
+│   │   │   ├── Layout.tsx        # Administrator layout
 │   │   │   ├── ClientLayout.tsx  # Client layout
 │   │   │   ├── PhaseProgressBar.tsx # Phase progress visual
 │   │   │   └── CreateLoginForm.tsx  # Client login creation
@@ -256,7 +262,7 @@ The backend `npm start` command runs `prisma migrate deploy` and seeds demo acco
 
 The application uses SQLite with the following tables:
 
-- **users**: System users (admin, staff, client)
+- **users**: System users (administrator, client)
 - **clients**: Client profiles with contact info and status
 - **consultations**: Consultation notes and sessions
 - **documents**: Uploaded files with metadata
@@ -284,9 +290,9 @@ The application uses SQLite with the following tables:
    - Add pool notes
    - View all project activity
 
-## Admin/Staff Workflow
+## Administrator Workflow
 
-1. Log in as admin or staff
+1. Log in as administrator
 2. View dashboard with client stats
 3. Create new clients
 4. Create pool projects for clients
@@ -298,7 +304,7 @@ The application uses SQLite with the following tables:
 ## Future Enhancements
 
 - Add email notifications for phase updates
-- Implement real-time chat between client and staff
+- Implement real-time chat between client and administrator
 - Add project photos and timeline
 - Implement calendar integration for consultations
 - Add reporting and analytics

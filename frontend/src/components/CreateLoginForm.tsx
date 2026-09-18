@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { clientUserApi } from '../api';
+import { clientUserApi, getApiErrorMessage } from '../api';
 import { AlertCircle, X } from 'lucide-react';
 
 interface CreateLoginFormProps {
@@ -25,7 +25,7 @@ export default function CreateLoginForm({ clientId, clientName, onSuccess, onCan
       const res = await clientUserApi.createLogin(clientId, { email, password, name });
       onSuccess(res.data);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create login account.');
+      setError(getApiErrorMessage(err, 'Failed to create login account.'));
     } finally {
       setIsLoading(false);
     }
@@ -77,9 +77,9 @@ export default function CreateLoginForm({ clientId, clientName, onSuccess, onCan
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               required
-              minLength={6}
+              minLength={12}
             />
-            <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+            <p className="text-xs text-gray-500 mt-1">At least 12 characters with uppercase, lowercase, number, and symbol</p>
           </div>
           <div className="flex items-center justify-end gap-3 pt-2">
             <button

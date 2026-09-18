@@ -169,6 +169,34 @@ export default function ClientDashboard() {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-3">
           <button
+            onClick={() => navigate(`/projects/${project.id}/design`)}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-colors"
+          >
+            <Briefcase className="h-4 w-4" />
+            Review Design & Scope
+          </button>
+          <button
+            onClick={() => navigate(`/projects/${project.id}/compliance`)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors"
+          >
+            <Briefcase className="h-4 w-4" />
+            View Compliance Status
+          </button>
+          <button
+            onClick={() => navigate(`/projects/${project.id}/preconstruction`)}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors"
+          >
+            <Clock className="h-4 w-4" />
+            Pre-Construction Actions
+          </button>
+          <button
+            onClick={() => navigate(`/projects/${project.id}/procurement`)}
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-50 text-cyan-800 rounded-lg hover:bg-cyan-100 transition-colors"
+          >
+            <Briefcase className="h-4 w-4" />
+            Procurement & Authorizations
+          </button>
+          <button
             onClick={() => navigate('/my-documents')}
             className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
           >

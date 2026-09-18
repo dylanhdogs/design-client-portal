@@ -2,6 +2,9 @@
   "name": "construction-client-portal",
   "version": "1.0.0",
   "description": "Construction Client Design Portal - Full Stack Application",
+  "engines": {
+    "node": ">=22.11 <23"
+  },
   "scripts": {
     "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
     "build": "npm run build:backend && npm run build:frontend",

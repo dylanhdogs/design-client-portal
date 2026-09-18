@@ -2,7 +2,8 @@ import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
-import { authenticate, authorize } from '../middleware/auth';
+import { assertDeletionAllowed } from '../utils/operations';
+import { authenticate, authorize, restrictToOwnClient, AuthRequest } from '../middleware/auth';
 import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 import { logActivity } from '../utils/activity';
 
@@ -12,14 +13,19 @@ const consultationSchema = z.object({
   title: z.string().min(1),
   date: z.string().datetime().or(z.string().min(1)),
   notes: z.string().optional(),
-  status: z.enum(['SCHEDULED', 'COMPLETED', 'CANCELLED']).default('SCHEDULED')
+  status: z.enum(['SCHEDULED', 'COMPLETED', 'CANCELLED']).default('SCHEDULED'),
+  inquiryId: z.string().uuid().nullable().optional(),
+  outcome: z.string().trim().max(5000).nullable().optional()
 });
 
-router.get('/', authenticate, async (req, res, next) => {
+router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { clientId } = req.params;
     const { includeDeleted } = req.query;
     const pagination = getPaginationParams(req.query);
+    if (includeDeleted === 'true' && (req as AuthRequest).user?.role === 'CLIENT') {
+      throw new AppError('Archived consultations are available only to internal users.', 403, 'FORBIDDEN');
+    }
     
     const where: any = { clientId };
     if (includeDeleted !== 'true') where.deletedAt = null;
@@ -41,11 +47,15 @@ router.get('/', authenticate, async (req, res, next) => {
   }
 });
 
-router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.post('/', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const { clientId } = req.params;
     const data = consultationSchema.parse(req.body);
     const userId = (req as any).user.id;
+    if (data.inquiryId) {
+      const inquiry = await prisma.inquiry.findFirst({ where: { id: data.inquiryId, clientId } });
+      if (!inquiry) throw new AppError('Inquiry not found for this client.', 404);
+    }
     
     const consultation = await prisma.consultation.create({
       data: {
@@ -54,7 +64,9 @@ router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, nex
         title: data.title,
         date: new Date(data.date),
         notes: data.notes || null,
-        status: data.status
+        status: data.status,
+        inquiryId: data.inquiryId,
+        outcome: data.outcome
       }
     });
 
@@ -66,17 +78,25 @@ router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, nex
   }
 });
 
-router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.put('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const { clientId, id } = req.params;
     const data = consultationSchema.partial().parse(req.body);
+
+    const existing = await prisma.consultation.findFirst({ where: { id, clientId, deletedAt: null } });
+    if (!existing) throw new AppError('Consultation not found.', 404);
+    if (data.inquiryId) {
+      const inquiry = await prisma.inquiry.findFirst({ where: { id: data.inquiryId, clientId } });
+      if (!inquiry) throw new AppError('Inquiry not found for this client.', 404);
+    }
     
     const consultation = await prisma.consultation.update({
       where: { id },
       data: {
         ...data,
         date: data.date ? new Date(data.date) : undefined,
-        notes: data.notes || null
+        notes: data.notes || null,
+        outcome: data.outcome === undefined ? undefined : data.outcome || null
       }
     });
 
@@ -88,11 +108,12 @@ router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, n
   }
 });
 
-router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.delete('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const cons = await prisma.consultation.findFirst({ where: { id, deletedAt: null } });
+    const { clientId, id } = req.params;
+    const cons = await prisma.consultation.findFirst({ where: { id, clientId, deletedAt: null } });
     if (!cons) throw new AppError('Consultation not found.', 404);
+    await assertDeletionAllowed('Consultation', id, clientId);
 
     await prisma.consultation.update({
       where: { id },
@@ -106,10 +127,10 @@ router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res
   }
 });
 
-router.post('/:id/restore', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.post('/:id/restore', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const cons = await prisma.consultation.findFirst({ where: { id, deletedAt: { not: null } } });
+    const { clientId, id } = req.params;
+    const cons = await prisma.consultation.findFirst({ where: { id, clientId, deletedAt: { not: null } } });
     if (!cons) throw new AppError('Deleted consultation not found.', 404);
 
     await prisma.consultation.update({

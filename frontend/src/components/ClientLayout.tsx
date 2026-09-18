@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, FileText, MessageSquare, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, MessageSquare, LogOut, ClipboardList } from 'lucide-react';
 import Logo from './Logo';
 import NotificationBell from './NotificationBell';
 
@@ -41,6 +41,15 @@ export default function ClientLayout() {
           >
             <FileText className="h-5 w-5" />
             <span>My Documents</span>
+          </Link>
+          <Link
+            to="/my-inquiry"
+            className={`flex shrink-0 items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-lg transition-colors ${
+              isActive('/my-inquiry') ? 'bg-blue-600 text-white' : 'text-blue-100 hover:bg-blue-800'
+            }`}
+          >
+            <ClipboardList className="h-5 w-5" />
+            <span>Inquiry</span>
           </Link>
           <Link
             to="/my-communications"

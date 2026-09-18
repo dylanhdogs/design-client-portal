@@ -149,16 +149,10 @@ async function seed() {
     }
   });
   
-  const staffPassword = await bcrypt.hash('staff123', 10);
-  const staff = await prisma.user.upsert({
-    where: { email: 'staff@example.com' },
-    update: {},
-    create: {
-      email: 'staff@example.com',
-      passwordHash: staffPassword,
-      name: 'Staff User',
-      role: 'STAFF'
-    }
+  // Retire the former Staff role without deleting its historical records.
+  await prisma.user.updateMany({
+    where: { role: 'STAFF', active: true },
+    data: { active: false, sessionVersion: { increment: 1 } },
   });
 
   let demoClient = await prisma.client.findFirst({
@@ -213,7 +207,6 @@ async function seed() {
   
   console.log('Seed completed successfully!');
   console.log('Admin: admin@example.com / admin123');
-  console.log('Staff: staff@example.com / staff123');
   console.log('Client: client@example.com / client123');
 }
 

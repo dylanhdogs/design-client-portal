@@ -1,0 +1,1018 @@
+Signature Exteriors Operational System
+Integrated Client Experience, Project Control & Service Delivery Framework
+Overall Operating Principle
+Every interaction should create one of five outcomes:
+Inform — someone knows what is happening, why, when, and what is expected.
+Authorize — a decision, selection, expenditure, change, or direction is formally approved.
+Verify — information, work, conditions, materials, or compliance is confirmed.
+Record — the project history is documented and retrievable.
+Advance — the project moves to the next appropriate stage.
+
+The system therefore becomes:
+
+Inquiry → Information → Qualification → Design → Compliance → Pre-Construction → Procurement → Construction → Verification → Handover → Warranty → Relationship
+
+with information continuously flowing between the functions.
+
+⸻
+
+1. RECEPTION & CLIENT INTAKE
+
+Primary purpose
+
+Create the first professional experience, accurately capture the opportunity, establish expectations, and determine whether the inquiry belongs within the Signature Exteriors operating model.
+
+Core processes
+
+Initial inquiry receipt
+Automated acknowledgment
+Client identification
+Property identification
+Project description
+Project objectives and priorities
+Preliminary scope
+Existing conditions
+Desired timing
+Budget/investment expectations
+Decision-maker identification
+Referral/source tracking
+Initial qualification
+Initial project classification
+Consultation scheduling
+Internal opportunity review
+Acceptance / decline / nurture
+
+Client interface
+
+The client should have a simple interaction point for:
+
+Submit inquiry
+Upload photographs
+Upload plans/documents
+Describe objectives
+Identify property
+Answer preliminary questions
+Schedule communication
+Respond to requests
+Receive confirmations
+Review next steps
+
+AI / automation
+
+Immediate acknowledgment
+Inquiry classification
+Information extraction
+Missing-information identification
+Duplicate-contact detection
+Preliminary project categorization
+Suggested response
+Scheduling assistance
+Follow-up reminders
+Internal notification
+Lead-source attribution
+
+Human responsibility
+
+AI facilitates the process; a qualified Signature Exteriors person establishes the relationship and makes the judgment.
+
+Required records
+
+Client profile
+Property profile
+Inquiry record
+Communication history
+Uploaded information
+Initial scope
+Qualification record
+Opportunity status
+Next action
+Responsibility assignment
+
+Gate
+
+Qualified Opportunity → Design / Consultation
+
+or
+
+Not Qualified → Decline / Nurture
+
+⸻
+
+2. DESIGN, SCOPE & COMPLIANCE
+
+Primary purpose
+
+Convert the client’s objectives and property information into an increasingly accurate understanding of what is possible, appropriate, compliant, and ultimately constructible.
+
+This is where the company’s experience becomes particularly valuable.
+
+Core processes
+
+Existing-condition investigation
+Site information collection
+Client requirements
+Concept development
+Scope development
+Design coordination
+Engineering requirements
+Architectural requirements
+Landscape/environmental considerations
+Drainage
+Grading
+Utilities
+Structural requirements
+Pool requirements
+Outdoor structures
+Culinary / entertaining areas
+Site access
+Material considerations
+Code analysis
+HOA requirements
+Municipal requirements
+Permit requirements
+Constructability review
+Preliminary cost development
+Scope clarification
+Design revisions
+Client decisions
+
+Client interface
+
+Client can:
+
+Review information
+Submit questions
+Respond to questions
+Approve design direction
+Review selections
+Upload documents
+Authorize additional design work
+Approve scope
+Identify changes
+See outstanding decisions
+Receive status updates
+
+AI / automation
+
+Document extraction
+Requirement identification
+Missing-data alerts
+Compliance checklist generation
+Decision tracking
+Meeting summaries
+Question routing
+Revision tracking
+Design-document organization
+Scope comparison
+Preliminary estimate assistance
+Automated reminders
+
+Human responsibility
+
+Design judgment, constructability, interpretation of conditions, client guidance, and final scope decisions remain human-controlled.
+
+Required records
+
+Site information
+Design versions
+Scope versions
+Client decisions
+Questions / answers
+Compliance requirements
+Engineering requirements
+HOA requirements
+Permit requirements
+Preliminary estimates
+Approvals
+Design meeting records
+
+Gate
+
+Design + Scope + Compliance sufficiently defined → Pre-Construction
+
+⸻
+
+3. PRE-CONSTRUCTION
+
+Primary purpose
+
+Transform the approved project into a controlled, executable construction plan before physical work begins.
+
+This is the major transition from selling/designing the project to operating the project.
+
+Core processes
+
+Contract verification
+Scope reconciliation
+Estimate-to-contract reconciliation
+Plans/specifications reconciliation
+Engineering
+Permitting
+HOA approvals
+Insurance/compliance
+Construction schedule
+Project budget
+Cost-code structure
+Procurement planning
+Subcontractor requirements
+Vendor requirements
+Site logistics
+Access
+Safety planning
+Existing-condition documentation
+Utility verification
+Staging
+Material selections
+Long-lead identification
+Client decision schedule
+Allowance reconciliation
+Change-order procedures
+Communication protocols
+Billing schedule
+Project kickoff
+
+Critical control
+
+Nothing should enter construction simply because the contract was signed.
+
+The project should pass a formal Construction Readiness Review.
+
+Construction readiness checklist
+
+Contract executed
+Scope reconciled
+Plans approved
+Engineering complete
+Required permits obtained
+HOA requirements satisfied
+Selections sufficiently complete
+Long-lead materials identified
+Procurement plan established
+Budget established
+Schedule established
+Client responsibilities identified
+Site conditions documented
+Safety requirements established
+Subcontractor requirements established
+Billing structure established
+Communication structure established
+Project team assigned
+Project kickoff completed
+
+Client interface
+
+Pre-construction dashboard
+Outstanding-items list
+Decision requests
+Selection approvals
+Schedule
+Payment/billing information
+Project documents
+Authorization requests
+Project kickoff communication
+
+AI / automation
+
+Readiness-gap analysis
+Missing-document detection
+Permit/status tracking
+Selection reminders
+Procurement alerts
+Schedule reminders
+Contract/scope comparison
+Budget-to-contract comparison
+Automated meeting summaries
+Action-item tracking
+
+Gate
+
+Construction Ready → Purchasing / Construction
+
+⸻
+
+4. PURCHASING & PROCUREMENT
+
+Primary purpose
+
+Ensure that the right materials, products, equipment, subcontractors, and services are available when required, at the correct cost, specification, quantity, and quality.
+
+Procurement should operate as a controlled project function—not simply as purchasing.
+
+Core processes
+
+Procurement schedule
+Material identification
+Vendor selection
+Subcontractor selection
+Quote solicitation
+Quote comparison
+Purchase authorization
+Subcontract authorization
+Order placement
+Lead-time verification
+Delivery scheduling
+Delivery confirmation
+Material inspection
+Storage/staging
+Invoice matching
+Purchase-order reconciliation
+Cost-code assignment
+Backorder management
+Substitution requests
+Material changes
+
+Three-way verification
+
+What was ordered → What was delivered → What was invoiced
+
+Client interface
+
+When applicable:
+
+Selection request
+Product presentation
+Cost impact
+Approval request
+Authorization
+Delivery status
+Change notification
+Substitution approval
+
+AI / automation
+
+Procurement reminders
+Lead-time monitoring
+Purchase-order generation
+Quote comparison
+Invoice matching
+Cost variance detection
+Delivery alerts
+Missing-receipt detection
+Material-status dashboard
+Vendor communication assistance
+
+Required records
+
+Purchase request
+Quote
+Vendor
+Purchase order
+Subcontract
+Authorization
+Delivery ticket
+Inspection
+Invoice
+Payment
+Cost code
+Change record
+
+Gate
+
+Material / service available and verified → Field Execution
+
+⸻
+
+5. CONSTRUCTION / FIELD OPERATIONS
+
+Primary purpose
+
+Execute the project safely, efficiently, professionally, and according to the approved scope while maintaining continuous communication and control.
+
+This is where the promises made during marketing, sales, design, and pre-construction become tangible.
+
+Core processes
+
+Daily planning
+Crew coordination
+Subcontractor coordination
+Site access
+Safety
+Site protection
+Material verification
+Work authorization
+Production
+Inspection
+Quality control
+Progress documentation
+Field measurements
+Existing-condition verification
+Client communication
+Questions
+Requests for information
+Field changes
+Change orders
+Directives
+Corrections
+Deficiencies
+Violations
+Deliveries
+Schedule updates
+Weather impacts
+Site conditions
+Cost events
+Progress billing
+Completion verification
+
+Field interface
+
+The project team should have a single operational field interface for:
+
+Daily reports
+Photos
+Video
+Measurements
+Crew information
+Site conditions
+Safety observations
+Deliveries
+Inspections
+Questions
+RFIs
+Change requests
+Directives
+Corrections
+Deficiencies
+Client conversations
+Decisions
+Approvals
+Completion of tasks
+
+Client interface
+
+The client should not need to understand the company’s internal systems.
+
+They should see:
+
+What happened → What is happening → What happens next → What we need from you
+
+with access to:
+
+Project status
+Schedule
+Progress
+Photos
+Decisions
+Questions
+Approvals
+Change orders
+Billing
+Upcoming activities
+Important notices
+
+AI / automation
+
+AI can continuously monitor:
+
+Daily reports
+Schedule
+Open issues
+Unanswered questions
+Pending approvals
+Change events
+Material delays
+Cost deviations
+Missing documentation
+Safety observations
+Quality concerns
+Communication gaps
+
+The system can then generate:
+
+Alert → Responsible person → Required action → Deadline → Confirmation
+
+Human responsibility
+
+Project leadership remains responsible for:
+
+Judgment
+Client relationships
+Trade coordination
+Quality
+Safety
+Scope interpretation
+Problem solving
+Negotiation
+Acceptance/rejection of work
+
+Gate
+
+Substantial Completion → Handover
+
+⸻
+
+6. HANDOVER / CLOSEOUT
+
+Primary purpose
+
+Convert a construction project into a completed Signature Exteriors experience.
+
+Completion should be treated as a process, not an event.
+
+Core processes
+
+Substantial completion
+Punch list
+Corrections
+Final inspections
+Municipal approvals
+Client inspection
+Final selections
+Equipment commissioning
+System operation
+Owner instruction
+Cleaning
+Documentation
+As-built information
+Warranty documentation
+Vendor information
+Maintenance information
+Final accounting
+Final billing
+Lien releases
+Final acceptance
+Project archive
+
+Client interface
+
+Client receives a structured:
+
+Project Completion Package
+
+including, as applicable:
+
+Final project documentation
+Product information
+Equipment information
+Maintenance information
+Warranty information
+Recommended service
+Important contacts
+Final photographs
+Final approvals
+Final billing
+Completion acknowledgment
+
+AI / automation
+
+Closeout checklist monitoring
+Missing-document detection
+Warranty registration
+Equipment documentation
+Final invoice package
+Client satisfaction request
+Review request
+Project archive creation
+Warranty calendar creation
+
+Gate
+
+Completed + Accepted + Documented → Warranty / Service
+
+⸻
+
+7. WARRANTY & CONTINUING SERVICE
+
+Primary purpose
+
+Demonstrate that Signature Exteriors’ responsibility does not end when the final payment is received.
+
+This becomes an important component of the service value proposition.
+
+Core processes
+
+Warranty registration
+Warranty documentation
+Client service requests
+Issue intake
+Classification
+Warranty determination
+Service scheduling
+Vendor coordination
+Inspection
+Diagnosis
+Correction
+Verification
+Client confirmation
+Warranty record
+Recurring maintenance recommendations
+Follow-up
+Relationship management
+
+Client interface
+
+A simple Service / Warranty Request interface:
+
+Request → Describe → Upload Photo/Video → Submit → Receive Confirmation → Track Resolution
+
+AI / automation
+
+AI can:
+
+Receive initial requests
+Classify the issue
+Identify project history
+Retrieve applicable warranty information
+Review prior records
+Request missing information
+Determine appropriate routing
+Schedule service
+Generate service communications
+Escalate unusual conditions
+Confirm completion
+Track unresolved issues
+
+Human responsibility
+
+Warranty decisions, technical diagnosis, client-sensitive situations, exceptions, and final resolution remain human-controlled.
+
+Gate
+
+Issue Resolved → Client Confirmation → Closed
+
+⸻
+
+The Cross-Functional Operating Layer
+
+The seven functions should not operate as seven separate software systems.
+
+They should share a common project information structure.
+
+One Project Record
+
+Every project should have a persistent record containing:
+
+Client
+
+Identity
+Contact information
+Preferences
+Communications
+Decisions
+Authorizations
+
+Property
+
+Address
+Site information
+Existing conditions
+Photos
+Utilities
+Access
+HOA
+Municipal information
+
+Scope
+
+Original scope
+Current scope
+Plans
+Specifications
+Selections
+Exclusions
+Allowances
+Changes
+
+Financial
+
+Estimate
+Contract
+Budget
+Commitments
+Purchases
+Costs
+Billing
+Payments
+Change orders
+Forecast
+Actuals
+
+Schedule
+
+Milestones
+Activities
+Dependencies
+Commitments
+Delays
+Decisions
+Procurement
+Inspections
+
+Communication
+
+Conversations
+Emails
+Messages
+Meetings
+Questions
+Answers
+Requests
+Responses
+Decisions
+Directives
+
+Compliance
+
+Licenses
+Permits
+Engineering
+Inspections
+HOA
+Safety
+Insurance
+Documentation
+
+Field
+
+Daily reports
+Photos
+Conditions
+Deliveries
+Labor
+Subcontractors
+Inspections
+Corrections
+Deficiencies
+Violations
+
+Closeout
+
+Punch list
+Acceptance
+Final documents
+Warranty
+Maintenance
+Client satisfaction
+
+⸻
+
+The User Interface Architecture
+
+Rather than creating dozens of independent forms, the interface should be organized around actions and events.
+
+1. REQUEST
+
+Someone needs something.
+
+Examples:
+
+Information request
+Client decision
+Material selection
+Approval
+Purchase
+Inspection
+Change
+Payment
+Field clarification
+
+⸻
+
+2. RESPONSE
+
+The responsible person provides:
+
+Answer
+Information
+Document
+Recommendation
+Cost
+Schedule
+Direction
+
+⸻
+
+3. DECISION
+
+Someone must decide.
+
+Examples:
+
+Approve
+Reject
+Select
+Authorize
+Change
+Proceed
+Defer
+
+⸻
+
+4. VERIFICATION
+
+The system asks:
+
+Was it actually done?
+
+Examples:
+
+Delivered
+Installed
+Inspected
+Corrected
+Approved
+Paid
+Completed
+
+⸻
+
+5. RECORD
+
+The system preserves:
+
+Who
+What
+When
+Where
+Why
+Result
+Supporting documentation
+
+⸻
+
+The Core Workflow Object
+
+Virtually every operational event can use the same structure:
+
+Initiated → Assigned → Reviewed → Action Required → Action Taken → Verified → Closed
+
+For example:
+
+Client Change Request
+
+Client Request
+↓
+AI captures and classifies
+↓
+Project Team reviews
+↓
+Scope impact determined
+↓
+Cost impact determined
+↓
+Schedule impact determined
+↓
+Change Order generated
+↓
+Client authorization
+↓
+Procurement / Field instruction
+↓
+Work performed
+↓
+Verified
+↓
+Billed
+↓
+Closed
+
+That same architecture can handle an RFI, delivery, field correction, warranty request, material substitution, safety issue, or billing question.
+
+⸻
+
+Communication Architecture
+
+A major objective should be to eliminate the common construction problem of information existing in disconnected conversations.
+
+Every significant communication should become a structured project record when appropriate.
+
+Communication types
+
+General information
+Question
+Request
+RFI
+Decision
+Approval
+Authorization
+Directive
+Change
+Notice
+Confirmation
+Exception
+Escalation
+Correction
+Completion
+
+Every significant communication should answer:
+
+Who?
+What?
+When?
+Why?
+Action required?
+By whom?
+By when?
+Cost impact?
+Schedule impact?
+Authorization required?
+Status?
+
+⸻
+
+Human + AI Operating Model
+
+The objective is not AI replacing the Signature Exteriors team.
+
+It is:
+
+AI handles
+
+Capture → Organize → Compare → Monitor → Remind → Summarize → Route → Prepare → Alert
+
+People handle
+
+Judge → Advise → Decide → Negotiate → Approve → Direct → Build Relationships → Accept Responsibility
+
+This distinction is important to the Signature Exteriors brand.
+
+The client should experience more human attention, not less, because AI removes administrative friction from the people responsible for the project.
+
+⸻
+
+Management Control Layer
+
+Above the seven operational functions should be a management dashboard showing:
+
+Client Experience
+
+Response time
+Open requests
+Unanswered questions
+Pending decisions
+Client satisfaction
+Communication frequency
+
+Project Control
+
+Schedule status
+Budget status
+Cost-to-complete
+Procurement status
+Open changes
+Open deficiencies
+Outstanding approvals
+
+Compliance
+
+Permits
+Inspections
+Safety
+Insurance
+Required documentation
+
+Financial
+
+Contract value
+Approved changes
+Billed
+Collected
+Committed costs
+Actual costs
+Forecast
+Margin
+
+Performance
+
+Estimate vs. actual
+Budget vs. actual
+Labor productivity
+Procurement variance
+Schedule variance
+Change-order frequency
+Rework
+Warranty events
+
+⸻
+
+The Signature Exteriors Service Experience
+
+Ultimately, all seven processes should produce the same client experience:
+
+1. We know where we are.
+
+2. We know what happens next.
+
+3. We know who is responsible.
+
+4. We know what information is required.
+
+5. We know what has been decided.
+
+6. We know what has been authorized.
+
+7. We know what has actually occurred.
+
+8. We have a record of it.
+
+9. We communicate exceptions before they become problems.
+
+10. We close the loop.
+
+That is the operational foundation underneath the marketing promise:
+
+Accurate Information.
+Informed, Structured Planning.
+Reliable Execution.
+
+And it directly supports the broader Signature Exteriors positioning of limited-volume, highly managed projects with direct oversight, continuity, accountability, and a consistently professional client experience.
+

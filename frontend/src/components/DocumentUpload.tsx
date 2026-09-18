@@ -5,12 +5,13 @@ import { FileText, Upload, X, Download, Eye, Trash2 } from 'lucide-react';
 
 interface DocumentUploadProps {
   clientId: string;
+  inquiryId?: string;
   onUploadComplete: () => void;
   documents: Document[];
   onDelete?: (docId: string) => void;
 }
 
-export default function DocumentUpload({ clientId, onUploadComplete, documents, onDelete }: DocumentUploadProps) {
+export default function DocumentUpload({ clientId, inquiryId, onUploadComplete, documents, onDelete }: DocumentUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -54,6 +55,9 @@ export default function DocumentUpload({ clientId, onUploadComplete, documents, 
     setIsUploading(true);
     const formData = new FormData();
     formData.append('file', selectedFile);
+    if (inquiryId) {
+      formData.append('inquiryId', inquiryId);
+    }
     if (description) {
       formData.append('description', description);
     }

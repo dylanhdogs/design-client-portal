@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily off-server mirror for Signature Portal backups
+
+[Timer]
+OnCalendar=*-*-* 02,14:30:00
+Persistent=true
+RandomizedDelaySec=10m
+Unit=signature-portal-backup-mirror.service
+
+[Install]
+WantedBy=timers.target

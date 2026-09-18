@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage, publicApi, PublicPortalConfig } from '../api';
 import { AlertCircle } from 'lucide-react';
 import Logo from '../components/Logo';
 
@@ -9,8 +10,13 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [publicConfig, setPublicConfig] = useState<PublicPortalConfig>({ privacyNoticeUrl: null, supportEmail: null, passwordResetMode: 'administrator' });
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    publicApi.getConfig().then((response) => setPublicConfig(response.data)).catch(() => undefined);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,10 +24,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
-      // Check if user is CLIENT and redirect accordingly
-      const storedUser = localStorage.getItem('user');
-      const user = storedUser ? JSON.parse(storedUser) : null;
+      const user = await login(email, password);
       if (user?.role === 'CLIENT') {
         navigate('/my-project');
       } else {
@@ -29,13 +32,13 @@ export default function Login() {
       }
     } catch (err: any) {
       if (!err.response) {
-        setError('Cannot reach the backend API. Check that the backend is running and VITE_API_URL is set correctly.');
+        setError('The portal is temporarily unavailable. Please try again or contact support.');
       } else if (err.response.status === 404) {
-        setError('Login API was not found. Cloudflare Pages needs VITE_API_URL set to your deployed backend.');
+        setError('The sign-in service is unavailable. Please contact support.');
       } else if (err.response.status === 401) {
         setError('Invalid email or password.');
       } else {
-        setError(err.response?.data?.error || 'Login failed. Please try again.');
+        setError(getApiErrorMessage(err, 'Login failed. Please try again.'));
       }
     } finally {
       setIsLoading(false);
@@ -105,12 +108,28 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-6 p-4 bg-black border border-gray-800 rounded-lg text-sm text-gray-400">
-          <p className="font-medium mb-2 text-gray-300">Demo credentials:</p>
-          <p>Admin: <span className="font-mono">admin@example.com</span> / <span className="font-mono">admin123</span></p>
-          <p>Staff: <span className="font-mono">staff@example.com</span> / <span className="font-mono">staff123</span></p>
-          <p>Client: <span className="font-mono">client@example.com</span> / <span className="font-mono">client123</span></p>
-        </div>
+        {import.meta.env.DEV && (
+          <div className="mt-6 p-4 bg-black border border-gray-800 rounded-lg text-sm text-gray-400">
+            <p className="font-medium mb-2 text-gray-300">Local demo credentials:</p>
+            <p>Admin: <span className="font-mono">admin@example.com</span> / <span className="font-mono">admin123</span></p>
+            <p>Client: <span className="font-mono">client@example.com</span> / <span className="font-mono">client123</span></p>
+          </div>
+        )}
+
+        {(publicConfig.privacyNoticeUrl || publicConfig.supportEmail) && (
+          <div className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs text-gray-400">
+            {publicConfig.privacyNoticeUrl && (
+              <a className="hover:text-white" href={publicConfig.privacyNoticeUrl} target="_blank" rel="noreferrer">
+                Privacy notice
+              </a>
+            )}
+            {publicConfig.supportEmail && (
+              <a className="hover:text-white" href={`mailto:${publicConfig.supportEmail}`}>
+                Contact support
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

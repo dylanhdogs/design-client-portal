@@ -2,7 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
-import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
+import { authenticate, authorize, restrictToOwnClient, AuthRequest } from '../middleware/auth';
 import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 import { logActivity } from '../utils/activity';
 
@@ -20,19 +20,28 @@ const clientSchema = z.object({
 
 const updateClientSchema = clientSchema.partial();
 
-router.get('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.get('/', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
-    const { status, search, includeDeleted } = req.query;
+    const { status, search, archived } = req.query;
     const pagination = getPaginationParams(req.query);
     
     const where: any = {};
-    if (includeDeleted !== 'true') where.deletedAt = null;
-    if (status) where.status = status as string;
+    if (archived === 'true') {
+      if ((req as AuthRequest).user?.role !== 'ADMIN') throw new AppError('Administrator access is required to view archived clients.', 403, 'FORBIDDEN');
+      where.deletedAt = { not: null };
+    } else {
+      where.deletedAt = null;
+    }
+    // Clients is the established-customer directory. Reception explicitly
+    // requests LEAD records when it needs to work the intake queue.
+    where.status = status ? status as string : 'ACTIVE';
     if (search) {
       where.OR = [
         { name: { contains: search as string, mode: 'insensitive' } },
         { company: { contains: search as string, mode: 'insensitive' } },
-        { email: { contains: search as string, mode: 'insensitive' } }
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { phone: { contains: search as string, mode: 'insensitive' } },
+        { address: { contains: search as string, mode: 'insensitive' } }
       ];
     }
     
@@ -71,12 +80,10 @@ router.get('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next
 router.get('/:id', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { includeDeleted } = req.query;
-    
     const client = await prisma.client.findFirst({
       where: {
         id,
-        ...(includeDeleted !== 'true' ? { deletedAt: null } : {})
+        deletedAt: null,
       },
       include: {
         consultations: {
@@ -90,6 +97,11 @@ router.get('/:id', authenticate, restrictToOwnClient, async (req, res, next) => 
         communications: {
           orderBy: { date: 'desc' },
           include: { user: { select: { name: true } } }
+        },
+        inquiries: {
+          where: { qualificationStatus: 'CONVERTED' },
+          orderBy: { convertedAt: 'desc' },
+          select: { id: true, projectId: true, qualificationStatus: true, convertedAt: true }
         },
         poolProject: {
           include: {
@@ -116,7 +128,7 @@ router.get('/:id', authenticate, restrictToOwnClient, async (req, res, next) => 
   }
 });
 
-router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.post('/', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const data = clientSchema.parse(req.body);
     
@@ -140,7 +152,7 @@ router.post('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, nex
   }
 });
 
-router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.put('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const data = updateClientSchema.parse(req.body);
@@ -170,14 +182,28 @@ router.delete('/:id', authenticate, authorize('ADMIN'), async (req, res, next) =
     const { id } = req.params;
     const client = await prisma.client.findFirst({ where: { id, deletedAt: null } });
     if (!client) throw new AppError('Client not found.', 404);
-
-    await prisma.client.update({
-      where: { id },
-      data: { deletedAt: new Date() }
+    const result = await prisma.$transaction(async (tx) => {
+      const hold = await tx.legalHold.findFirst({ where: { active: true, entityType: 'Client', entityId: id } });
+      if (hold) throw new AppError('This record is under legal hold and cannot be deleted.', 409, 'CONFLICT');
+      const linkedUsers = await tx.user.findMany({ where: { clientId: id }, select: { id: true } });
+      const linkedUserIds = linkedUsers.map((user) => user.id);
+      const assignments = linkedUserIds.length
+        ? await tx.projectAssignment.updateMany({ where: { userId: { in: linkedUserIds }, active: true }, data: { active: false } })
+        : { count: 0 };
+      const users = await tx.user.updateMany({
+        where: { clientId: id },
+        data: { active: false, sessionVersion: { increment: 1 }, resetToken: null, resetTokenExpires: null },
+      });
+      const invitations = await tx.invitation.updateMany({
+        where: { clientId: id, status: 'PENDING' },
+        data: { status: 'REVOKED' },
+      });
+      await tx.client.update({ where: { id }, data: { deletedAt: new Date() } });
+      return { revokedUsers: users.count, revokedInvitations: invitations.count, deactivatedAssignments: assignments.count };
     });
 
-    logActivity((req as any).user.id, 'DELETE', 'Client', id);
-    res.json({ message: 'Client deleted successfully.' });
+    await logActivity((req as any).user.id, 'DELETE', 'Client', id, result);
+    res.json({ message: 'Client deleted and linked access revoked successfully.', ...result });
   } catch (err) {
     next(err);
   }

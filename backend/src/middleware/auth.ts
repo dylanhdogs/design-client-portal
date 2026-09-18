@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { AppError } from '../utils/errors';
 import { prisma } from '../utils/prisma';
 import { getJwtSecret } from '../utils/env';
+import { clearSessionCookies, parseCookies, requireCsrfForCookieAuth, SESSION_COOKIE } from '../utils/cookies';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -11,22 +12,43 @@ export interface AuthRequest extends Request {
     role: string;
     name: string;
     clientId?: string;
+    sessionVersion: number;
   };
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    throw new AppError('Access denied. No token provided.', 401);
-  }
-
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as any;
-    req.user = decoded;
+    const authorization = req.headers.authorization;
+    const bearerToken = authorization?.startsWith('Bearer ') && authorization.length > 7
+      ? authorization.slice(7)
+      : undefined;
+    const cookieToken = parseCookies(req)[SESSION_COOKIE];
+    const token = bearerToken || cookieToken;
+
+    if (!token) {
+      throw new AppError('Access denied. No token provided.', 401);
+    }
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, getJwtSecret()) as any;
+    } catch {
+      throw new AppError('Invalid token.', 401);
+    }
+    if (!bearerToken && cookieToken) requireCsrfForCookieAuth(req);
+    const currentUser = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, email: true, role: true, name: true, clientId: true, sessionVersion: true, active: true, client: { select: { deletedAt: true } } },
+    });
+    if (!currentUser || !currentUser.active || decoded.sessionVersion !== currentUser.sessionVersion || (currentUser.role === 'CLIENT' && (!currentUser.clientId || !currentUser.client || currentUser.client.deletedAt !== null))) {
+      clearSessionCookies(res);
+      throw new AppError('Session is no longer valid. Please sign in again.', 401);
+    }
+    const { active: _active, client: _client, ...authenticatedUser } = currentUser;
+    req.user = { ...authenticatedUser, clientId: authenticatedUser.clientId || undefined };
     next();
-  } catch (err) {
-    throw new AppError('Invalid token.', 401);
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -48,16 +70,18 @@ export const restrictToOwnClient = async (req: AuthRequest, res: Response, next:
     if (!req.user) {
       throw new AppError('Access denied.', 403);
     }
+    const clientId = req.params.clientId || req.params.id;
+    if (!clientId || !(await prisma.client.findFirst({ where: { id: clientId, deletedAt: null }, select: { id: true } }))) {
+      throw new AppError('Client not found.', 404, 'NOT_FOUND');
+    }
     
-    // If user is ADMIN or STAFF, allow access
-    if (req.user.role === 'ADMIN' || req.user.role === 'STAFF') {
+    // Only the administrator has internal access. Legacy staff accounts are no longer supported.
+    if (req.user.role === 'ADMIN') {
       return next();
     }
     
     // If user is CLIENT, verify they own this client
     if (req.user.role === 'CLIENT') {
-      const { clientId } = req.params;
-      
       if (!req.user.clientId) {
         throw new AppError('Client account not properly linked.', 403);
       }

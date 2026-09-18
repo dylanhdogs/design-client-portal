@@ -3,29 +3,47 @@
   "version": "1.0.0",
   "description": "Construction Client Design Portal - Backend API",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=22.11 <23"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
-    "start": "npm run db:deploy && node dist/index.js",
+    "start": "npm run preflight && npm run db:deploy && node dist/index.js",
     "start:server": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "db:deploy": "prisma migrate deploy && npm run db:seed",
-    "db:studio": "prisma studio"
+    "db:backfill": "tsx prisma/backfill-workflow.ts",
+    "db:deploy": "prisma migrate deploy && npm run db:backfill",
+    "db:deploy:demo": "prisma migrate deploy && npm run db:seed && npm run db:backfill",
+    "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
+    "db:studio": "prisma studio",
+    "test": "tsx --test tests/security.test.ts tests/operations.test.ts tests/deployment.test.ts tests/deployment-artifacts.test.ts",
+    "backup:create": "tsx scripts/backup.ts",
+    "backup:restore": "tsx scripts/restore-backup.ts",
+    "preflight": "tsx scripts/preflight.ts",
+    "manifest:create": "tsx scripts/deployment-manifest.ts",
+    "inventory:create": "tsx scripts/data-inventory.ts",
+    "inventory:compare": "tsx scripts/compare-inventories.ts",
+    "operations:status": "tsx scripts/operations-status.ts",
+    "verify:performance": "tsx scripts/performance-check.ts",
+    "verify:parity": "tsx scripts/verify-parity.ts",
+    "verify:report-exports": "tsx scripts/verify-client-status-exports.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.15.0",
+    "@prisma/client": "^6.19.3",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.5.2",
     "express-validator": "^7.1.0",
+    "exceljs": "^4.4.0",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.11.0",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.3.0",
+    "pdfkit": "^0.20.2",
     "tsx": "^4.15.0",
     "zod": "^3.23.8"
   },
@@ -37,10 +55,15 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
-    "@types/morgan": "^1.9.10",
-    "@types/multer": "^1.4.11",
+    "@types/multer": "^2.0.0",
     "@types/node": "^20.14.0",
-    "prisma": "^5.22.0",
+    "@types/pdfkit": "^0.17.6",
+    "prisma": "^6.19.3",
     "typescript": "^5.4.5"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0",
+    "qs": "^6.16.0",
+    "uuid": "^11.1.1"
   }
 }

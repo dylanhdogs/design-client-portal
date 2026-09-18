@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Users, LogOut } from 'lucide-react';
+import { BarChart3, LayoutDashboard, Users, LogOut, Inbox } from 'lucide-react';
 import Logo from './Logo';
 import NotificationBell from './NotificationBell';
 
@@ -41,6 +41,24 @@ export default function Layout() {
           >
             <Users className="h-5 w-5" />
             <span>Clients</span>
+          </Link>
+          <Link
+            to="/inquiries"
+            className={`flex shrink-0 items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-lg transition-colors ${
+              isActive('/inquiries') ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
+            }`}
+          >
+            <Inbox className="h-5 w-5" />
+            <span>Reception Intake</span>
+          </Link>
+          <Link
+            to="/management"
+            className={`flex shrink-0 items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-lg transition-colors ${
+              isActive('/management') ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
+            }`}
+          >
+            <BarChart3 className="h-5 w-5" />
+            <span>Management</span>
           </Link>
         </nav>
 

@@ -1,0 +1,35 @@
+# Replace RELEASE_ID and PORTAL_HOST before use. Keep the backend port private:
+# Traefik is the only public ingress and this service has no `ports` mapping.
+services:
+  backend:
+    build:
+      context: ./releases/RELEASE_ID
+      dockerfile: deployment/hostinger/Dockerfile.traefik
+    image: signature-portal:RELEASE_ID
+    restart: unless-stopped
+    env_file:
+      - ./production.env
+    volumes:
+      - ./persistent/data:/srv/signature-portal-production/data
+      - ./persistent/uploads:/srv/signature-portal-production/uploads
+      - ./persistent/backups:/srv/signature-portal-production/backups
+      - ./persistent/manifests:/srv/signature-portal-production/manifests
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.webapp.rule=Host(`PORTAL_HOST`)
+      - traefik.http.routers.webapp.entrypoints=web,websecure
+      - traefik.http.routers.webapp.tls=true
+      - traefik.http.routers.webapp.tls.certresolver=mytlschallenge
+      - traefik.http.services.webapp.loadbalancer.server.port=4000
+    networks:
+      - n8n_default
+
+networks:
+  n8n_default:
+    external: true

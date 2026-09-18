@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
+import { approvalLimiter } from '../middleware/rateLimits';
+import { logActivity } from '../utils/activity';
 
 const router = express.Router({ mergeParams: true });
 
@@ -69,63 +71,94 @@ router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   }
 });
 
-// Update a phase (ADMIN/STAFF only)
-router.put('/:phaseId', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+// Update a phase (ADMIN only)
+router.put('/:phaseId', authenticate, authorize('ADMIN'), approvalLimiter, async (req, res, next) => {
   try {
     const { clientId, phaseId } = req.params;
     const data = phaseSchema.parse(req.body);
     
     const project = await prisma.poolProject.findUnique({
-      where: { clientId }
+      where: { clientId },
+      select: { id: true, currentPhase: true }
     });
     
     if (!project) {
       throw new AppError('Pool project not found.', 404);
     }
     
-    const phase = await prisma.projectPhase.update({
-      where: { id: phaseId },
-      data: {
-        status: data.status,
-        startDate: data.startDate ? new Date(data.startDate) : undefined,
-        completedDate: data.completedDate ? new Date(data.completedDate) : undefined
-      },
-      include: {
-        checklistItems: {
-          orderBy: { order: 'asc' }
-        }
-      }
+    const existingPhase = await prisma.projectPhase.findFirst({
+      where: { id: phaseId, projectId: project.id },
+      include: { checklistItems: { orderBy: { order: 'asc' } } },
     });
-    
-    // Update project currentPhase if needed
+
+    if (!existingPhase) {
+      throw new AppError('Phase not found for this project.', 404);
+    }
+
     if (data.status === 'COMPLETED') {
-      const completedPhase = await prisma.projectPhase.findUnique({
-        where: { id: phaseId }
-      });
-      
-      if (completedPhase && completedPhase.order > project.currentPhase) {
-        await prisma.poolProject.update({
-          where: { id: project.id },
-          data: {
-            currentPhase: completedPhase.order,
-            status: completedPhase.name
-          }
-        });
-      }
-      
-      // Auto-advance next phase to IN_PROGRESS
-      const nextPhase = await prisma.projectPhase.findFirst({
-        where: { projectId: project.id, order: completedPhase!.order + 1 }
-      });
-      
-      if (nextPhase) {
-        await prisma.projectPhase.update({
-          where: { id: nextPhase.id },
-          data: { status: 'IN_PROGRESS', startDate: new Date() }
-        });
+      const blockers = existingPhase.checklistItems
+        .filter((item) => !item.isCompleted || item.verificationStatus !== 'APPROVED')
+        .map((item) => ({ id: item.id, description: item.description }));
+      if (blockers.length > 0) {
+        throw new AppError(
+          'The phase cannot be completed until all checklist items are approved.',
+          409,
+          'GATE_BLOCKED',
+          { blockers },
+        );
       }
     }
-    
+
+    const phase = await prisma.$transaction(async (tx) => {
+      const updated = await tx.projectPhase.update({
+        where: { id: existingPhase.id },
+        data: {
+          status: data.status,
+          startDate: data.startDate
+            ? new Date(data.startDate)
+            : data.status === 'IN_PROGRESS' && !existingPhase.startDate
+              ? new Date()
+              : undefined,
+          completedDate: data.status === 'COMPLETED'
+            ? (data.completedDate ? new Date(data.completedDate) : new Date())
+            : null,
+        },
+        include: { checklistItems: { orderBy: { order: 'asc' } } },
+      });
+
+      if (data.status === 'COMPLETED') {
+        const nextPhase = await tx.projectPhase.findFirst({
+          where: { projectId: project.id, order: existingPhase.order + 1 },
+        });
+
+        if (nextPhase) {
+          await tx.projectPhase.update({
+            where: { id: nextPhase.id },
+            data: {
+              status: 'IN_PROGRESS',
+              startDate: nextPhase.startDate || new Date(),
+            },
+          });
+        }
+
+        await tx.poolProject.update({
+          where: { id: project.id },
+          data: {
+            currentPhase: nextPhase?.order || existingPhase.order,
+            status: nextPhase?.name || 'COMPLETED',
+          },
+        });
+      }
+
+      return updated;
+    });
+
+    await logActivity((req as any).user.id, 'UPDATE', 'ProjectPhase', phase.id, {
+      previousStatus: existingPhase.status,
+      status: phase.status,
+      projectId: project.id,
+    });
+
     res.json(phase);
   } catch (err) {
     next(err);
@@ -133,12 +166,12 @@ router.put('/:phaseId', authenticate, authorize('ADMIN', 'STAFF'), async (req, r
 });
 
 // Toggle checklist item
-router.put('/:phaseId/checklist/:itemId', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.put('/:phaseId/checklist/:itemId', authenticate, authorize('ADMIN'), approvalLimiter, async (req, res, next) => {
   try {
     const { clientId, phaseId, itemId } = req.params;
     const userId = (req as any).user.id;
     
-    const { isCompleted } = req.body;
+    const { isCompleted } = z.object({ isCompleted: z.boolean() }).parse(req.body);
     
     const project = await prisma.poolProject.findUnique({
       where: { clientId }
@@ -148,8 +181,19 @@ router.put('/:phaseId/checklist/:itemId', authenticate, authorize('ADMIN', 'STAF
       throw new AppError('Pool project not found.', 404);
     }
     
+    const phase = await prisma.projectPhase.findFirst({
+      where: { id: phaseId, projectId: project.id },
+      select: { id: true },
+    });
+    if (!phase) throw new AppError('Phase not found for this project.', 404);
+
+    const existingItem = await prisma.checklistItem.findFirst({
+      where: { id: itemId, phaseId: phase.id },
+    });
+    if (!existingItem) throw new AppError('Checklist item not found for this phase.', 404);
+
     const item = await prisma.checklistItem.update({
-      where: { id: itemId },
+      where: { id: existingItem.id },
       data: {
         isCompleted: !!isCompleted,
         completedAt: isCompleted ? new Date() : null,
@@ -160,6 +204,12 @@ router.put('/:phaseId/checklist/:itemId', authenticate, authorize('ADMIN', 'STAF
         rejectionReason: null
       }
     });
+
+    await logActivity(userId, 'UPDATE', 'ChecklistItem', item.id, {
+      phaseId,
+      projectId: project.id,
+      isCompleted,
+    });
     
     res.json(item);
   } catch (err) {
@@ -168,7 +218,7 @@ router.put('/:phaseId/checklist/:itemId', authenticate, authorize('ADMIN', 'STAF
 });
 
 // Client submits a checklist item for admin verification
-router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnClient, async (req, res, next) => {
+router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnClient, approvalLimiter, async (req, res, next) => {
   try {
     const { clientId, phaseId, itemId } = req.params;
     const userId = (req as any).user.id;
@@ -210,7 +260,7 @@ router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnCli
     });
 
     const reviewers = await prisma.user.findMany({
-      where: { role: { in: ['ADMIN', 'STAFF'] } },
+      where: { role: 'ADMIN', active: true },
       select: { id: true }
     });
 
@@ -223,14 +273,16 @@ router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnCli
       itemId
     });
 
+    await logActivity(userId, 'SUBMIT', 'ChecklistItem', item.id, { phaseId, projectId: project.id });
+
     res.json(item);
   } catch (err) {
     next(err);
   }
 });
 
-// Admin/staff approves or rejects a submitted checklist item
-router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+// Administrator approves or rejects a submitted checklist item
+router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'), approvalLimiter, async (req, res, next) => {
   try {
     const { clientId, phaseId, itemId } = req.params;
     const userId = (req as any).user.id;
@@ -251,6 +303,10 @@ router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'
 
     if (!existing) {
       throw new AppError('Checklist item not found.', 404);
+    }
+
+    if (existing.verificationStatus !== 'SUBMITTED') {
+      throw new AppError('Only submitted checklist items can be verified.', 409, 'INVALID_TRANSITION');
     }
 
     const item = await prisma.checklistItem.update({
@@ -285,6 +341,13 @@ router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'
       clientId,
       phaseId,
       itemId
+    });
+
+    await logActivity(userId, 'VERIFY', 'ChecklistItem', item.id, {
+      phaseId,
+      projectId: project.id,
+      approved: data.approved,
+      rejectionReason: item.rejectionReason,
     });
 
     res.json(item);

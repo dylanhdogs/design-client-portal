@@ -7,6 +7,11 @@ frontend/node_modules/
 dist/
 backend/dist/
 frontend/dist/
+backend/output/
+*.db-shm
+*.db-wal
+.deploy-transfer/
+SE Design Admin Login.txt
 backend/prisma/*.js
 backend/prisma/*.js.map
 backend/prisma/*.d.ts
