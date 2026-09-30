@@ -14,13 +14,23 @@ The application uses immutable Docker releases. Never edit the running container
 
 ## 1. Before Every Update
 
+Use a new release ID for every deployment. The application version is a
+separate human-friendly SemVer value (`MAJOR.MINOR.PATCH`) shown in both admin
+and client sidebars. The release ID uniquely identifies the exact deployment
+and is shown beside that version on every device.
+
+Before packaging, update the root/backend/frontend package versions together,
+add a dated entry to `CHANGELOG.md`, and record the release ID and commit in
+`DEPLOYMENT_STATUS.md`. Bump the minor version for backward-compatible features,
+the patch for fixes, and the major version only for planned breaking changes.
+
 Use a new release ID. A timestamp is easiest:
 
 ```text
 YYYYMMDD-HHMM
 ```
 
-Example: `20260905-1430`.
+Example: `20260930-1533` (UTC).
 
 Before continuing:
 
@@ -194,7 +204,10 @@ The output must show only your new release directory and image tag.
 ## 9. Build Beside the Live Application
 
 ```bash
-docker compose -f "docker-compose.${RELEASE_ID}.yml" build backend
+docker compose -f "docker-compose.${RELEASE_ID}.yml" build \
+  --build-arg "VITE_APP_VERSION=1.1.0" \
+  --build-arg "VITE_APP_RELEASE_ID=${RELEASE_ID}" \
+  backend
 ```
 
 The old container continues serving the application during this build. Do not switch releases if the build fails.
@@ -218,6 +231,7 @@ docker logs --tail 100 webapp-backend-1
 Look for:
 
 - Your new `signature-portal:<release-id>` image.
+- The admin and client sidebars show the same application version and release ID.
 - Container status `healthy`.
 - `deployment_preflight_passed`.
 - `All migrations have been successfully applied` or `No pending migrations`.
@@ -268,6 +282,11 @@ Update the local `DEPLOYMENT_STATUS.md` with:
 - Pre-update and post-update backup paths.
 - Database migration applied, if any.
 - Previous release retained for rollback.
+
+The sidebar version is built into the frontend bundle. A device may continue to
+show the previous release while an old page is open or cached; refresh the app
+to load the current release. Compare both the SemVer and release ID when
+reporting which version a device is using.
 
 ## 13. Fast Rollback
 

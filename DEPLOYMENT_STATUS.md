@@ -1,6 +1,45 @@
 # Production Deployment Status
 
-## Current production release
+## Current update readiness — 2026-09-30
+
+- Production remains on image `signature-portal:20260923-1827` at
+  `https://app.srv1633240.hstgr.cloud`.
+- Candidate application version `1.1.0` adds a visible version/release marker
+  for admin and client users. It is **not deployed**.
+- Candidate source is branch `codex/update-reception-workflow`, currently based
+  on GitHub commit `16f9085ab431b0dce1a7aa77584ef23b7afed8ee`, plus the local
+  uncommitted version-marker and release-documentation changes. The candidate
+  has not been built as a production image or deployed.
+- The branch now contains the five migrations confirmed applied on production,
+  through `20260923180000_rom_proposal_details`, plus the matching Prisma fields,
+  Reception workflow, compliance research, and ROM editor changes. This is a
+  migration-history match, not proof that this branch produced the running image;
+  the production image's source commit remains unknown.
+- Production remains on image `signature-portal:20260923-1827` at
+  `https://app.srv1633240.hstgr.cloud`. Its observed digest is
+  `sha256:25119e9d30e8c6d51393087ad98124c2b6e394242a4814f6f3281a485142318d`.
+  The VPS has applied these later migrations:
+  `20260922120000_reception_design_foundation`,
+  `20260923120000_compliance_research_jobs`,
+  `20260923143000_compliance_source_authority`,
+  `20260923163000_inquiry_saved_compliance_links`, and
+  `20260923180000_rom_proposal_details`.
+- The matching migration history removes the previously identified schema-age
+  mismatch, but does not establish full source equivalence with the live
+  release. Before deploying, build and test this exact commit, review the diff,
+  and follow the backup/preflight/rollback process in `HOW_TO_UPDATE_HOSTINGER.md`.
+- Frontend production build passed locally (Node.js 24; project targets Node.js
+  22). Backend TypeScript/Prisma build passed on a sequential retry after a
+  concurrent Prisma engine-file lock. Backend integration tests are not fully
+  verified: four Reception API tests fail during setup because the local
+  database rejects the test's expected demo admin login with HTTP 401. Other
+  tests reported before interruption passed. Re-run against an isolated,
+  correctly seeded test database on the supported Node.js version before release.
+
+The deployment records below document prior releases; the most recent verified
+production image is `signature-portal:20260923-1827`.
+
+## Historical release details — 2026-09-04 (superseded)
 
 - **Status:** Live and healthy
 - **Deployed:** September 23, 2026

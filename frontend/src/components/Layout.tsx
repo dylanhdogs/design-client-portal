@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { BarChart3, LayoutDashboard, Users, LogOut, Inbox } from 'lucide-react';
 import Logo from './Logo';
 import NotificationBell from './NotificationBell';
+import PortalVersion from './PortalVersion';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -79,6 +80,7 @@ export default function Layout() {
             <LogOut className="h-4 w-4" />
             <span>Logout</span>
           </button>
+          <PortalVersion />
         </div>
       </aside>
 

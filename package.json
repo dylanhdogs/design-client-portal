@@ -1,6 +1,6 @@
 {
   "name": "construction-client-portal",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Construction Client Design Portal - Full Stack Application",
   "engines": {
     "node": ">=22.11 <23"
