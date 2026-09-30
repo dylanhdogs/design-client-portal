@@ -37,11 +37,19 @@ export interface Consultation {
   clientId: string;
   userId: string;
   title: string;
+  activityType: 'SITE_MEETING' | 'PHONE_CALL' | 'VIDEO_CALL' | 'HOA_ARC' | 'MUNICIPAL' | 'OTHER';
+  subject: string | null;
   date: string;
+  endAt: string | null;
   notes: string | null;
   status: string;
   inquiryId?: string | null;
   outcome?: string | null;
+  participants?: string | null;
+  internalFollowers?: string | null;
+  nextAction?: string | null;
+  nextActionDueAt?: string | null;
+  cancellationReason?: string | null;
   createdAt: string;
   updatedAt: string;
   user?: { name: string };
@@ -205,11 +213,28 @@ export interface Inquiry {
   discovery: PoolDiscovery | null;
   discoveryCompletedAt: string | null;
   siteAssessment: string | null;
-  romAmount: string | null;
-  proposalNarrative: string | null;
-  proposalProvidedAt: string | null;
+    romAmount: string | null;
+    proposalNarrative: string | null;
+    romProposalDetails: string | null;
+    proposalProvidedAt: string | null;
   proposalClientResponse: string | null;
+  romStatus: string | null;
+  romDecisionAt: string | null;
+  romApprovedBy: string | null;
+  designAgreementStatus: string | null;
+  designAgreementAcceptedAt: string | null;
+  designAgreementAcceptedBy: string | null;
+  handoffSummary: string | null;
   handoffApprovedAt: string | null;
+  handoffApprovedBy: string | null;
+  complianceVerificationStatus: string | null;
+  complianceVerificationCheckedAt: string | null;
+  complianceVerificationSource: string | null;
+  complianceVerificationCategories: string | null;
+  complianceVerificationLinks: string | null;
+  complianceVerificationReviewedBy: string | null;
+  complianceVerificationReviewedAt: string | null;
+  complianceVerificationNotes: string | null;
   qualificationStatus: string;
   ownerId: string | null;
   nextAction: string | null;
@@ -225,8 +250,66 @@ export interface Inquiry {
   project?: PoolProject | null;
 }
 
+export interface ComplianceResearchSource {
+  id: string;
+  title: string;
+  url: string;
+  domain: string;
+  excerpt: string | null;
+  authorityType: 'CITY' | 'COUNTY' | 'STATE' | 'HOA' | 'OTHER';
+  authorityName: string;
+  retrievedAt: string;
+}
+
+export interface ComplianceResearchJob {
+  id: string;
+  status: 'QUEUED' | 'RUNNING' | 'NEEDS_REVIEW' | 'FAILED';
+  progress: number;
+  querySummary: string | null;
+  sourceCount: number;
+  errorMessage: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  sources: ComplianceResearchSource[];
+}
+
+export interface SavedComplianceLink {
+  id: string;
+  title: string;
+  url: string;
+  domain: string;
+  summary: string | null;
+  authorityType: 'CITY' | 'COUNTY' | 'STATE' | 'HOA' | 'OTHER';
+  authorityName: string;
+  addedAt: string;
+}
+
+export interface ComplianceResearchSnapshot {
+  job: ComplianceResearchJob | null;
+  savedLinks: SavedComplianceLink[];
+  verification: {
+    status: string | null;
+    categories: string | null;
+    links: string | null;
+    notes: string | null;
+    checkedAt: string | null;
+  };
+}
+
 export interface PoolDiscovery {
   projectType: string;
+  municipality: string;
+  communityDevelopment: string;
+  communitySubcommunity: string;
+  hoaArcContact: string;
+  complianceCategories: string;
+  complianceLinks: string;
+  complianceVerificationStatus: string;
+  complianceVerificationCheckedAt: string;
+  complianceFollowUpStatus: '' | 'NOT_REQUIRED' | 'TBD' | 'VERIFIED';
+  complianceFollowUpOwner: string;
+  complianceFollowUpDueAt: string;
+  complianceFollowUpAction: string;
   primaryUse: string;
   householdUsers: string;
   decisionMakers: string;

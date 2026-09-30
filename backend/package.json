@@ -19,7 +19,7 @@
     "db:deploy:demo": "prisma migrate deploy && npm run db:seed && npm run db:backfill",
     "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
     "db:studio": "prisma studio",
-    "test": "tsx --test tests/security.test.ts tests/operations.test.ts tests/deployment.test.ts tests/deployment-artifacts.test.ts",
+    "test": "tsx --test tests/security.test.ts tests/operations.test.ts tests/deployment.test.ts tests/deployment-artifacts.test.ts tests/reception-gates.test.ts tests/reception-api.test.ts tests/compliance-research.test.ts",
     "backup:create": "tsx scripts/backup.ts",
     "backup:restore": "tsx scripts/restore-backup.ts",
     "preflight": "tsx scripts/preflight.ts",

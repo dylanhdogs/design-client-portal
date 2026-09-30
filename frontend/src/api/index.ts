@@ -247,7 +247,7 @@ export const workflowApi = {
 };
 
 export const inquiryApi = {
-  list: (params?: { status?: string; ownerId?: string; search?: string; overdue?: boolean }) => api.get('/inquiries', { params }),
+  list: (params?: { status?: string; ownerId?: string; search?: string; overdue?: boolean; limit?: number }) => api.get('/inquiries', { params }),
   get: (id: string) => api.get(`/inquiries/${id}`),
   downloadPdf: async (id: string, clientName: string) => {
     const response = await fetch(getApiUrl(`/inquiries/${id}/export`), { credentials: 'include' });
@@ -262,6 +262,10 @@ export const inquiryApi = {
   create: (data: Record<string, unknown>) => api.post('/inquiries', data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/inquiries/${id}`, data),
   saveDiscovery: (id: string, discovery: object) => api.put(`/inquiries/${id}`, { discovery }),
+  verifyCompliance: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/compliance-verification`, data),
+  startComplianceResearch: (id: string) => api.post(`/inquiries/${id}/compliance-research`),
+  getComplianceResearch: (id: string) => api.get(`/inquiries/${id}/compliance-research`),
+  addComplianceLink: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/compliance-links`, data),
   setStatus: (id: string, status: string, reason?: string) => api.post(`/inquiries/${id}/status`, { status, reason }),
   convert: (id: string) => api.post(`/inquiries/${id}/convert`),
   requestInformation: (id: string, data: { title: string; description?: string; dueAt: string }) => api.post(`/inquiries/${id}/missing-information`, data),

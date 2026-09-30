@@ -101,10 +101,18 @@ model Consultation {
   userId    String    @map("user_id")
   inquiryId String?   @map("inquiry_id")
   title     String
+  activityType String @default("SITE_MEETING") @map("activity_type")
+  subject   String?
   date      DateTime
+  endAt     DateTime? @map("end_at")
   notes     String?
   status    String    @default("SCHEDULED")
   outcome   String?
+  participants String?
+  internalFollowers String? @map("internal_followers")
+  nextAction String? @map("next_action")
+  nextActionDueAt DateTime? @map("next_action_due_at")
+  cancellationReason String? @map("cancellation_reason")
   deletedAt DateTime? @map("deleted_at")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -344,9 +352,26 @@ model Inquiry {
   siteAssessment      String?   @map("site_assessment")
   romAmount           String?   @map("rom_amount")
   proposalNarrative   String?   @map("proposal_narrative")
+  romProposalDetails  String?   @map("rom_proposal_details")
   proposalProvidedAt  DateTime? @map("proposal_provided_at")
   proposalClientResponse String? @map("proposal_client_response")
+  romStatus           String?   @map("rom_status")
+  romDecisionAt       DateTime? @map("rom_decision_at")
+  romApprovedBy       String?   @map("rom_approved_by")
+  designAgreementStatus String? @map("design_agreement_status")
+  designAgreementAcceptedAt DateTime? @map("design_agreement_accepted_at")
+  designAgreementAcceptedBy String? @map("design_agreement_accepted_by")
+  handoffSummary      String?   @map("handoff_summary")
   handoffApprovedAt   DateTime? @map("handoff_approved_at")
+  handoffApprovedBy   String?   @map("handoff_approved_by")
+  complianceVerificationStatus String? @map("compliance_verification_status")
+  complianceVerificationCheckedAt DateTime? @map("compliance_verification_checked_at")
+  complianceVerificationSource String? @map("compliance_verification_source")
+  complianceVerificationCategories String? @map("compliance_verification_categories")
+  complianceVerificationLinks String? @map("compliance_verification_links")
+  complianceVerificationReviewedBy String? @map("compliance_verification_reviewed_by")
+  complianceVerificationReviewedAt DateTime? @map("compliance_verification_reviewed_at")
+  complianceVerificationNotes String? @map("compliance_verification_notes")
   qualificationStatus String    @default("NEW") @map("qualification_status")
   ownerId             String?   @map("owner_id")
   nextAction          String?   @map("next_action")
@@ -364,6 +389,8 @@ model Inquiry {
   documents     Document[]
   workItems     WorkItem[]
   statusReports ClientStatusReport[]
+  complianceResearchJobs ComplianceResearchJob[]
+  savedComplianceLinks InquiryComplianceLink[]
 
   @@index([clientId])
   @@index([propertyId])
@@ -372,6 +399,64 @@ model Inquiry {
   @@index([qualificationStatus])
   @@index([organizationId, qualificationStatus])
   @@map("inquiries")
+}
+
+model ComplianceResearchJob {
+  id           String    @id @default(uuid())
+  inquiryId    String    @map("inquiry_id")
+  requestedBy  String    @map("requested_by")
+  status       String    @default("QUEUED")
+  progress     Int       @default(0)
+  querySummary String?   @map("query_summary")
+  sourceCount  Int       @default(0) @map("source_count")
+  errorMessage String?   @map("error_message")
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  inquiry Inquiry                    @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  sources ComplianceResearchSource[]
+
+  @@index([inquiryId, createdAt])
+  @@index([status, createdAt])
+  @@map("compliance_research_jobs")
+}
+
+model ComplianceResearchSource {
+  id            String   @id @default(uuid())
+  jobId         String   @map("job_id")
+  title         String
+  url           String
+  domain        String
+  excerpt       String?
+  authorityType String   @default("OTHER") @map("authority_type")
+  authorityName String   @default("Other source") @map("authority_name")
+  retrievedAt   DateTime @default(now()) @map("retrieved_at")
+
+  job ComplianceResearchJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, url])
+  @@index([jobId])
+  @@map("compliance_research_sources")
+}
+
+model InquiryComplianceLink {
+  id            String   @id @default(uuid())
+  inquiryId     String   @map("inquiry_id")
+  title         String
+  url           String
+  domain        String
+  summary       String?
+  authorityType String   @map("authority_type")
+  authorityName String   @map("authority_name")
+  addedAt       DateTime @default(now()) @map("added_at")
+
+  inquiry Inquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+
+  @@unique([inquiryId, url])
+  @@index([inquiryId, addedAt])
+  @@map("inquiry_compliance_links")
 }
 
 model LifecycleStage {

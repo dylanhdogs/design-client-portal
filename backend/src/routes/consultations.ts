@@ -11,11 +11,19 @@ const router = express.Router({ mergeParams: true });
 
 const consultationSchema = z.object({
   title: z.string().min(1),
+  activityType: z.enum(['SITE_MEETING', 'PHONE_CALL', 'VIDEO_CALL', 'HOA_ARC', 'MUNICIPAL', 'OTHER']).default('SITE_MEETING'),
+  subject: z.string().trim().max(500).nullable().optional(),
   date: z.string().datetime().or(z.string().min(1)),
+  endAt: z.string().datetime().or(z.string().min(1)).nullable().optional(),
   notes: z.string().optional(),
   status: z.enum(['SCHEDULED', 'COMPLETED', 'CANCELLED']).default('SCHEDULED'),
   inquiryId: z.string().uuid().nullable().optional(),
-  outcome: z.string().trim().max(5000).nullable().optional()
+  outcome: z.string().trim().max(5000).nullable().optional(),
+  participants: z.string().trim().max(2000).nullable().optional(),
+  internalFollowers: z.string().trim().max(2000).nullable().optional(),
+  nextAction: z.string().trim().max(1000).nullable().optional(),
+  nextActionDueAt: z.string().datetime().or(z.string().min(1)).nullable().optional(),
+  cancellationReason: z.string().trim().max(1000).nullable().optional(),
 });
 
 router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
@@ -51,6 +59,7 @@ router.post('/', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const { clientId } = req.params;
     const data = consultationSchema.parse(req.body);
+    if (data.status === 'CANCELLED' && !data.cancellationReason) throw new AppError('A cancellation reason is required.', 400, 'VALIDATION_ERROR');
     const userId = (req as any).user.id;
     if (data.inquiryId) {
       const inquiry = await prisma.inquiry.findFirst({ where: { id: data.inquiryId, clientId } });
@@ -62,11 +71,19 @@ router.post('/', authenticate, authorize('ADMIN'), async (req, res, next) => {
         clientId,
         userId,
         title: data.title,
+        activityType: data.activityType,
+        subject: data.subject || null,
         date: new Date(data.date),
+        endAt: data.endAt ? new Date(data.endAt) : null,
         notes: data.notes || null,
         status: data.status,
         inquiryId: data.inquiryId,
-        outcome: data.outcome
+        outcome: data.outcome || null,
+        participants: data.participants || null,
+        internalFollowers: data.internalFollowers || null,
+        nextAction: data.nextAction || null,
+        nextActionDueAt: data.nextActionDueAt ? new Date(data.nextActionDueAt) : null,
+        cancellationReason: data.cancellationReason || null,
       }
     });
 
@@ -82,6 +99,7 @@ router.put('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const { clientId, id } = req.params;
     const data = consultationSchema.partial().parse(req.body);
+    if (data.status === 'CANCELLED' && !data.cancellationReason) throw new AppError('A cancellation reason is required.', 400, 'VALIDATION_ERROR');
 
     const existing = await prisma.consultation.findFirst({ where: { id, clientId, deletedAt: null } });
     if (!existing) throw new AppError('Consultation not found.', 404);
@@ -94,9 +112,17 @@ router.put('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
       where: { id },
       data: {
         ...data,
+        activityType: data.activityType,
+        subject: data.subject === undefined ? undefined : data.subject || null,
         date: data.date ? new Date(data.date) : undefined,
+        endAt: data.endAt === undefined ? undefined : data.endAt ? new Date(data.endAt) : null,
         notes: data.notes || null,
-        outcome: data.outcome === undefined ? undefined : data.outcome || null
+        outcome: data.outcome === undefined ? undefined : data.outcome || null,
+        participants: data.participants === undefined ? undefined : data.participants || null,
+        internalFollowers: data.internalFollowers === undefined ? undefined : data.internalFollowers || null,
+        nextAction: data.nextAction === undefined ? undefined : data.nextAction || null,
+        nextActionDueAt: data.nextActionDueAt === undefined ? undefined : data.nextActionDueAt ? new Date(data.nextActionDueAt) : null,
+        cancellationReason: data.cancellationReason === undefined ? undefined : data.cancellationReason || null,
       }
     });
 

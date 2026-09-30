@@ -68,6 +68,11 @@ before(async () => {
 
   adminToken = await login('admin@example.com', 'admin123');
   adminUserId = (await prisma.user.findUniqueOrThrow({ where: { email: 'admin@example.com' } })).id;
+  await prisma.user.upsert({
+    where: { email: 'staff@example.com' },
+    update: { passwordHash: await bcrypt.hash('staff123', 10), name: 'Design Coordinator', role: 'ADMIN', active: true, sessionVersion: { increment: 1 } },
+    create: { email: 'staff@example.com', passwordHash: await bcrypt.hash('staff123', 10), name: 'Design Coordinator', role: 'ADMIN' },
+  });
   staffToken = await login('staff@example.com', 'staff123');
   staffUserId = (await prisma.user.findUniqueOrThrow({ where: { email: 'staff@example.com' } })).id;
   clientToken = await login('client@example.com', 'client123');
@@ -141,6 +146,7 @@ after(async () => {
   await removeFixtureClient('security-client-2@example.com').catch(() => undefined);
   await removeFixtureClient('inquiry-client@example.com').catch(() => undefined);
   await prisma.user.deleteMany({ where: { email: 'recovery-user@example.com' } }).catch(() => undefined);
+  await prisma.user.deleteMany({ where: { email: 'staff@example.com' } }).catch(() => undefined);
   if (procurementVendorIds.length) await prisma.vendor.deleteMany({ where: { id: { in: procurementVendorIds } } }).catch(() => undefined);
   const fixturePath = path.join(getUploadDirectory(), secondDocumentFilename);
   if (fs.existsSync(fixturePath)) fs.unlinkSync(fixturePath);
@@ -263,7 +269,7 @@ test('administrator can recover an account without database editing', async () =
     create: {
       email: 'recovery-user@example.com',
       name: 'Recovery User',
-      role: 'STAFF',
+      role: 'ADMIN',
       passwordHash: await bcrypt.hash('Original-Password-42!', 12),
     },
   });
@@ -271,7 +277,7 @@ test('administrator can recover an account without database editing', async () =
 
   const denied = await request(`/api/auth/users/${recoveryUser.id}/password`, {
     method: 'PUT',
-    headers: { authorization: `Bearer ${staffToken}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${clientToken}`, 'content-type': 'application/json' },
     body: JSON.stringify({ newPassword: 'Recovered-Password-43!' }),
   });
   assert.equal(denied.response.status, 403);
@@ -358,11 +364,11 @@ test('deleting a client revokes linked sessions until both client and account ar
     const archived = await request('/api/clients?archived=true', { headers: { authorization: `Bearer ${adminToken}` } });
     assert.equal(archived.response.status, 200);
     assert.ok(archived.body.data.some((item: any) => item.id === client.id));
-    const staffArchived = await request('/api/clients?archived=true', { headers: { authorization: `Bearer ${staffToken}` } });
+    const staffArchived = await request('/api/clients?archived=true', { headers: { authorization: `Bearer ${clientToken}` } });
     assert.equal(staffArchived.response.status, 403);
-    const nestedArchived = await request(`/api/clients/${client.id}/communications`, { headers: { authorization: `Bearer ${staffToken}` } });
+    const nestedArchived = await request(`/api/clients/${client.id}/communications`, { headers: { authorization: `Bearer ${clientToken}` } });
     assert.equal(nestedArchived.response.status, 404);
-    const archivedWorkflow = await request(`/api/projects/${project.id}/command-center`, { headers: { authorization: `Bearer ${staffToken}` } });
+    const archivedWorkflow = await request(`/api/projects/${project.id}/command-center`, { headers: { authorization: `Bearer ${clientToken}` } });
     assert.equal(archivedWorkflow.response.status, 404);
     const prematureReactivation = await request(`/api/auth/users/${user.id}/access`, {
       method: 'PUT', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ active: true }),
@@ -693,7 +699,7 @@ test('inquiry submission, qualification, documents, consultation, and conversion
   assert.equal(submitted.body.qualificationStatus, 'NEW');
   assert.equal(submitted.body.ownerId, null);
   assert.ok(submitted.body.property.id);
-  const internalRecipientCount = await prisma.user.count({ where: { role: { in: ['ADMIN', 'STAFF'] } } });
+  const internalRecipientCount = await prisma.user.count({ where: { role: 'ADMIN', active: true } });
   assert.equal(await prisma.notification.count({ where: { inquiryId: submitted.body.id, type: 'INQUIRY_RECEIVED' } }), internalRecipientCount);
   assert.equal(await prisma.notification.count({ where: { inquiryId: submitted.body.id, type: 'INQUIRY_ACKNOWLEDGED' } }), 1);
 
@@ -719,7 +725,8 @@ test('inquiry submission, qualification, documents, consultation, and conversion
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
     body: JSON.stringify({ status: 'IN_REVIEW' }),
   });
-  assert.equal(reviewStarted.response.status, 200);
+  assert.equal(reviewStarted.response.status, 409);
+  assert.equal(reviewStarted.body.error.code, 'GATE_BLOCKED');
 
   const clientUpdate = await request(`/api/inquiries/${submitted.body.id}`, {
     method: 'PUT',
@@ -781,7 +788,27 @@ test('inquiry submission, qualification, documents, consultation, and conversion
   assert.equal(assigned.response.status, 200);
   assert.equal(await prisma.notification.count({ where: { inquiryId: submitted.body.id, type: 'INQUIRY_ASSIGNED', userId: adminUserId } }), 1);
 
-  for (const status of ['QUALIFIED']) {
+  const readiness = await request(`/api/inquiries/${submitted.body.id}`, {
+    method: 'PUT',
+    headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      discovery: {
+        projectType: 'Concrete pool and outdoor living', primaryUse: 'Family recreation',
+        decisionMakers: 'Inquiry Client and partner', propertyAccess: 'Open access through side gate',
+        siteConditions: 'Mostly level yard', utilities: 'Utilities identified', surveyStatus: 'Current survey on file',
+        mustHaveFeatures: 'Pool, shade, and outdoor kitchen', budgetRange: '$100,000-$150,000',
+        targetCompletion: 'Spring 2027',
+      },
+      siteAssessment: 'Access, utilities, and preliminary feasibility reviewed.',
+      romAmount: '$125,000', romStatus: 'APPROVED', romDecisionAt: new Date().toISOString(), romApprovedBy: adminUserId,
+      designAgreementStatus: 'ACCEPTED', designAgreementAcceptedAt: new Date().toISOString(), designAgreementAcceptedBy: adminUserId,
+      handoffSummary: 'ROM approved; proceed to Design with the documented scope and site constraints.',
+      handoffApprovedBy: adminUserId,
+    }),
+  });
+  assert.equal(readiness.response.status, 200);
+
+  for (const status of ['IN_REVIEW', 'QUALIFIED']) {
     const changed = await request(`/api/inquiries/${submitted.body.id}/status`, {
       method: 'POST',
       headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
@@ -1076,7 +1103,7 @@ test('Pre-Construction readiness enforces reconciliation, completeness, client d
     body: JSON.stringify({ reason: 'Final tile selection is scheduled after procurement release.', risk: 'Finish pricing may vary.', mitigation: 'Carry the approved allowance and require selection before ordering.', ownerId: adminUserId, dueAt: new Date(Date.now() + 86400000).toISOString(), highRisk: true }),
   });
   assert.equal(exception.response.status, 201);
-  const deniedApproval = await request(`/api/readiness-exceptions/${exception.body.id}/approve`, { method: 'POST', headers: { authorization: `Bearer ${staffToken}` } });
+  const deniedApproval = await request(`/api/readiness-exceptions/${exception.body.id}/approve`, { method: 'POST', headers: { authorization: `Bearer ${clientToken}` } });
   assert.equal(deniedApproval.response.status, 403);
   const approvedException = await request(`/api/readiness-exceptions/${exception.body.id}/approve`, { method: 'POST', headers: { authorization: `Bearer ${adminToken}` } });
   assert.equal(approvedException.body.status, 'APPROVED');
@@ -1138,13 +1165,13 @@ test('Procurement controls vendors, quotes, authorization, deliveries, substitut
     const quote = await request(`/api/procurement/requests/${procurement.body.id}/quotes`, { method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' }, body: JSON.stringify(data) });
     assert.equal(quote.response.status, 201); quotes.push(quote.body);
   }
-  const deniedSelection = await request(`/api/procurement/requests/${procurement.body.id}/select-quote`, { method: 'POST', headers: { authorization: `Bearer ${staffToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ quoteId: quotes[1].id }) });
+  const deniedSelection = await request(`/api/procurement/requests/${procurement.body.id}/select-quote`, { method: 'POST', headers: { authorization: `Bearer ${clientToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ quoteId: quotes[1].id }) });
   assert.equal(deniedSelection.response.status, 403);
   const selected = await request(`/api/procurement/requests/${procurement.body.id}/select-quote`, { method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ quoteId: quotes[1].id }) });
   assert.equal(selected.response.status, 200);
   assert.equal(selected.body.selectedQuote.id, quotes[1].id);
 
-  const deniedPo = await request(`/api/procurement/requests/${procurement.body.id}/purchase-order`, { method: 'POST', headers: { authorization: `Bearer ${staffToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ orderNumber: 'PO-TEST-DENIED' }) });
+  const deniedPo = await request(`/api/procurement/requests/${procurement.body.id}/purchase-order`, { method: 'POST', headers: { authorization: `Bearer ${clientToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ orderNumber: 'PO-TEST-DENIED' }) });
   assert.equal(deniedPo.response.status, 403);
   const po = await request(`/api/procurement/requests/${procurement.body.id}/purchase-order`, { method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ orderNumber: `PO-${Date.now()}` }) });
   assert.equal(po.response.status, 201);
@@ -1263,7 +1290,7 @@ test('Automation remains reviewable and non-authoritative while notifications re
 test('production controls expose health and feature state while legal holds prevent deletion', async()=>{
   const health=await request('/api/health');assert.equal(health.response.status,200);assert.equal(health.body.checks.database.ok,true);assert.equal(health.body.checks.uploadStorage.ok,true);assert.ok(health.response.headers.get('x-request-id'));
   const ready=await request('/api/health/ready');assert.equal(ready.body.status,'ready');
-  const denied=await request('/api/management/legal-holds',{method:'POST',headers:{authorization:`Bearer ${staffToken}`,'content-type':'application/json'},body:JSON.stringify({entityType:'Document',entityId:secondDocumentId,reason:'Staff must not be allowed to create a legal hold.'})});assert.equal(denied.response.status,403);
+  const denied=await request('/api/management/legal-holds',{method:'POST',headers:{authorization:`Bearer ${clientToken}`,'content-type':'application/json'},body:JSON.stringify({entityType:'Document',entityId:secondDocumentId,reason:'A client must not be allowed to create a legal hold.'})});assert.equal(denied.response.status,403);
   const created=await request('/api/management/legal-holds',{method:'POST',headers:{authorization:`Bearer ${adminToken}`,'content-type':'application/json'},body:JSON.stringify({entityType:'Document',entityId:secondDocumentId,reason:'Litigation preservation test requires this document to remain immutable.'})});assert.equal(created.response.status,201);
   const deletion=await request(`/api/clients/${secondClientId}/documents/${secondDocumentId}`,{method:'DELETE',headers:{authorization:`Bearer ${adminToken}`}});assert.equal(deletion.response.status,409);assert.match(deletion.body.error.message,/legal hold/i);
   const released=await request(`/api/management/legal-holds/${created.body.id}/release`,{method:'POST',headers:{authorization:`Bearer ${adminToken}`}});assert.equal(released.body.active,false);

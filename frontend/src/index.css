@@ -9,3 +9,74 @@ body {
 section[aria-label="Reception intake list"] {
   grid-column: 1 / -1;
 }
+
+.inquiry-form-shell {
+  --inquiry-border: #cbd5e1;
+  --inquiry-focus: #2563eb;
+}
+
+.inquiry-form-shell label,
+.inquiry-form-shell fieldset {
+  min-width: 0;
+}
+
+.inquiry-form-shell .form-field-caption {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding-bottom: 0.125rem;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.inquiry-form-shell input:not([type="checkbox"]):not([type="radio"]),
+.inquiry-form-shell select {
+  min-height: 2.75rem;
+  border: 1px solid var(--inquiry-border);
+  border-radius: 0.625rem;
+  background-color: #fff;
+  padding: 0.625rem 0.875rem;
+  color: #0f172a;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.inquiry-form-shell textarea {
+  min-height: 6rem;
+  border: 1px solid var(--inquiry-border);
+  border-radius: 0.625rem;
+  background-color: #fff;
+  padding: 0.75rem 0.875rem;
+  color: #0f172a;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  resize: vertical;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.inquiry-form-shell input::placeholder,
+.inquiry-form-shell textarea::placeholder {
+  color: #94a3b8;
+}
+
+.inquiry-form-shell input:not([type="checkbox"]):not([type="radio"]):focus,
+.inquiry-form-shell select:focus,
+.inquiry-form-shell textarea:focus {
+  border-color: var(--inquiry-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.14);
+}
+
+.inquiry-form-shell input:disabled,
+.inquiry-form-shell select:disabled,
+.inquiry-form-shell textarea:disabled {
+  cursor: not-allowed;
+  background-color: #f1f5f9;
+  color: #64748b;
+}

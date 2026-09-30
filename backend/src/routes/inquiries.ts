@@ -10,6 +10,7 @@ import { phaseTemplates } from '../utils/poolProject';
 import { initializeWorkflowProject } from '../workflow/initialize';
 import { assertActiveAssignee } from '../workflow/authorization';
 import { inquiryPdfFileName, renderInquiryPdf } from '../reporting/inquiryExports';
+import { isArizonaState } from '../services/complianceResearch';
 
 const router = express.Router();
 router.use(authenticate, loadClientData);
@@ -25,6 +26,18 @@ const propertySchema = z.object({
 
 const discoverySchema = z.object({
   projectType: z.string().trim().max(100).default(''),
+  municipality: z.string().trim().max(150).default(''),
+  communityDevelopment: z.string().trim().max(200).default(''),
+  communitySubcommunity: z.string().trim().max(200).default(''),
+  hoaArcContact: z.string().trim().max(1000).default(''),
+  complianceCategories: z.string().trim().max(3000).default(''),
+  complianceLinks: z.string().trim().max(5000).default(''),
+  complianceVerificationStatus: z.string().trim().max(100).default(''),
+  complianceVerificationCheckedAt: z.string().trim().max(100).default(''),
+  complianceFollowUpStatus: z.enum(['', 'NOT_REQUIRED', 'TBD', 'VERIFIED']).default(''),
+  complianceFollowUpOwner: z.string().trim().max(100).default(''),
+  complianceFollowUpDueAt: z.string().trim().max(100).default(''),
+  complianceFollowUpAction: z.string().trim().max(1000).default(''),
   primaryUse: z.string().trim().max(1000).default(''),
   householdUsers: z.string().trim().max(1000).default(''),
   decisionMakers: z.string().trim().max(1000).default(''),
@@ -45,6 +58,11 @@ const discoverySchema = z.object({
   priorityTradeoffs: z.string().trim().max(2000).default(''),
   knownConcerns: z.string().trim().max(2000).default(''),
   representativeNotes: z.string().trim().max(5000).default(''),
+}).superRefine((data, context) => {
+  if (data.complianceFollowUpStatus !== 'TBD') return;
+  if (!data.complianceFollowUpOwner) context.addIssue({ code: z.ZodIssueCode.custom, path: ['complianceFollowUpOwner'], message: 'A follow-up owner is required when compliance is TBD.' });
+  if (!data.complianceFollowUpDueAt) context.addIssue({ code: z.ZodIssueCode.custom, path: ['complianceFollowUpDueAt'], message: 'A follow-up due date is required when compliance is TBD.' });
+  if (!data.complianceFollowUpAction) context.addIssue({ code: z.ZodIssueCode.custom, path: ['complianceFollowUpAction'], message: 'A follow-up action is required when compliance is TBD.' });
 });
 
 const discoveryRequiredFields = [
@@ -52,21 +70,21 @@ const discoveryRequiredFields = [
   'utilities', 'surveyStatus', 'mustHaveFeatures', 'budgetRange', 'targetCompletion',
 ] as const;
 
-function discoveryIsComplete(discovery: z.infer<typeof discoverySchema> | null | undefined) {
+export function discoveryIsComplete(discovery: z.infer<typeof discoverySchema> | null | undefined) {
   return Boolean(discovery && discoveryRequiredFields.every((field) => {
     const value = discovery[field]?.trim();
     return value && value.toUpperCase() !== 'UNKNOWN';
   }));
 }
 
-function inquiryPhaseRequirements(inquiry: any, phaseIndex: number) {
+export function inquiryPhaseRequirements(inquiry: any, phaseIndex: number) {
   const hasText = (value: unknown) => typeof value === 'string' && Boolean(value.trim());
   const hasContact = Boolean(inquiry.client?.name && (inquiry.client?.email || inquiry.client?.phone));
-  const isSiteMeeting = (item: any) => typeof item.title === 'string' && /site\s+meeting/i.test(item.title);
+  const isSiteMeeting = (item: any) => item.activityType === 'SITE_MEETING' || (typeof item.title === 'string' && /site\s+meeting/i.test(item.title));
   const hasScheduledSiteMeeting = Boolean(inquiry.consultations?.some((item: any) => item.status === 'SCHEDULED' && isSiteMeeting(item)));
   const hasCompletedSiteMeeting = Boolean(inquiry.consultations?.some((item: any) => item.status === 'COMPLETED' && isSiteMeeting(item) && hasText(item.outcome)));
-  const hasSiteEvidence = Boolean(inquiry.documents?.some((item: any) => !item.deletedAt));
   const hasOpenRequests = Boolean(inquiry.workItems?.some((item: any) => !['VERIFIED', 'CLOSED', 'CANCELLED'].includes(item.status)));
+  const complianceReviewRequired = Boolean(inquiry.discovery?.complianceFollowUpStatus === 'TBD' || hasText(inquiry.discovery?.complianceCategories) || hasText(inquiry.discovery?.hoaArcContact) || hasText(inquiry.discovery?.hoaRequirements));
   const requirements = [
     [
       { title: 'Client name and email or phone', complete: hasContact },
@@ -81,27 +99,28 @@ function inquiryPhaseRequirements(inquiry: any, phaseIndex: number) {
       { title: 'Budget expectation recorded', complete: hasText(inquiry.budgetExpectation) },
       { title: 'Desired timing recorded', complete: hasText(inquiry.desiredTiming) },
       { title: 'Pre-design discovery completed', complete: discoveryIsComplete(inquiry.discovery) },
-      { title: 'Design inspirations recorded', complete: hasText(inquiry.designInspirations) },
     ],
     [
-      { title: 'Site meeting scheduled', complete: hasScheduledSiteMeeting },
-      { title: 'Site meeting completed with outcome', complete: hasCompletedSiteMeeting },
+      { title: 'All site meeting(s) completed with outcomes', complete: hasCompletedSiteMeeting && !hasScheduledSiteMeeting },
       { title: 'Site measurements, access, and feasibility recorded', complete: hasText(inquiry.siteAssessment) },
-      { title: 'Site photos or supporting evidence uploaded', complete: hasSiteEvidence },
       { title: 'All client information requests resolved', complete: !hasOpenRequests },
+      { title: 'Compliance review verified when applicable', complete: !complianceReviewRequired || inquiry.complianceVerificationStatus === 'VERIFIED' },
     ],
     [
       { title: 'ROM amount or range recorded', complete: hasText(inquiry.romAmount) },
-      { title: 'Narrative and design proposal recorded', complete: hasText(inquiry.proposalNarrative) },
-      { title: 'Proposal delivery date recorded', complete: Boolean(inquiry.proposalProvidedAt) },
-      { title: 'Client response or decision recorded', complete: hasText(inquiry.proposalClientResponse) },
+      { title: 'ROM approved with decision record', complete: inquiry.romStatus === 'APPROVED' && Boolean(inquiry.romDecisionAt && inquiry.romApprovedBy) },
+      { title: 'Design Agreement accepted or not required', complete: ['ACCEPTED', 'NOT_REQUIRED'].includes(inquiry.designAgreementStatus) && (inquiry.designAgreementStatus === 'NOT_REQUIRED' || Boolean(inquiry.designAgreementAcceptedAt && inquiry.designAgreementAcceptedBy)) },
+      { title: 'Design handoff summary recorded', complete: hasText(inquiry.handoffSummary) },
       { title: 'Design handoff completed', complete: Boolean(inquiry.projectId && inquiry.qualificationStatus === 'CONVERTED') },
     ],
   ];
+  if (inquiry.qualificationStatus === 'CONVERTED' && inquiry.projectId) {
+    return (requirements[phaseIndex] || []).map((requirement) => ({ ...requirement, complete: true }));
+  }
   return requirements[phaseIndex] || [];
 }
 
-function incompleteInquiryPhaseRequirements(inquiry: any, phaseIndex: number) {
+export function incompleteInquiryPhaseRequirements(inquiry: any, phaseIndex: number) {
   return inquiryPhaseRequirements(inquiry, phaseIndex).filter((requirement: { title: string; complete: boolean }) => !requirement.complete);
 }
 
@@ -112,6 +131,32 @@ function presentInquiry<T extends { discoveryData?: string | null }>(inquiry: T)
     try { discovery = discoverySchema.parse(JSON.parse(discoveryData)); } catch { discovery = null; }
   }
   return { ...rest, discovery };
+}
+
+function presentInquiryForRole(inquiry: any, role?: string) {
+  const presented = presentInquiry(inquiry);
+  if (role !== 'CLIENT') return presented;
+  return {
+    ...presented,
+    ownerId: null,
+    owner: null,
+    nextAction: null,
+    nextActionDueAt: null,
+    proposalNarrative: null,
+    proposalProvidedAt: null,
+    proposalClientResponse: null,
+    romApprovedBy: null,
+    designAgreementAcceptedBy: null,
+    handoffApprovedBy: null,
+    complianceVerificationReviewedBy: null,
+    complianceVerificationNotes: null,
+    workItems: (presented.workItems || []).filter((item: any) => item.clientVisible).map((item: any) => ({
+      ...item, reviewerId: null, createdBy: null,
+    })),
+    consultations: (presented.consultations || []).map((item: any) => ({
+      ...item, userId: null, internalFollowers: null,
+    })),
+  };
 }
 
 const inquirySchema = z.object({
@@ -135,8 +180,25 @@ const inquirySchema = z.object({
   siteAssessment: z.string().trim().max(10000).nullable().optional(),
   romAmount: z.string().trim().max(500).nullable().optional(),
   proposalNarrative: z.string().trim().max(10000).nullable().optional(),
+  romProposalDetails: z.string().max(30000).nullable().optional(),
   proposalProvidedAt: z.coerce.date().nullable().optional(),
   proposalClientResponse: z.string().trim().max(2000).nullable().optional(),
+  romStatus: z.enum(['DRAFT', 'PRESENTED', 'APPROVED', 'REJECTED', 'NEEDS_REVISION']).nullable().optional(),
+  romDecisionAt: z.coerce.date().nullable().optional(),
+  romApprovedBy: z.string().uuid().nullable().optional(),
+  designAgreementStatus: z.enum(['NOT_REQUIRED', 'PENDING', 'ACCEPTED', 'DECLINED']).nullable().optional(),
+  designAgreementAcceptedAt: z.coerce.date().nullable().optional(),
+  designAgreementAcceptedBy: z.string().uuid().nullable().optional(),
+  handoffSummary: z.string().trim().max(10000).nullable().optional(),
+  handoffApprovedBy: z.string().uuid().nullable().optional(),
+  complianceVerificationStatus: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'NEEDS_REVIEW', 'VERIFIED', 'FAILED']).nullable().optional(),
+  complianceVerificationCheckedAt: z.coerce.date().nullable().optional(),
+  complianceVerificationSource: z.string().trim().max(1000).nullable().optional(),
+  complianceVerificationCategories: z.string().trim().max(3000).nullable().optional(),
+  complianceVerificationLinks: z.string().trim().max(5000).nullable().optional(),
+  complianceVerificationReviewedBy: z.string().uuid().nullable().optional(),
+  complianceVerificationReviewedAt: z.coerce.date().nullable().optional(),
+  complianceVerificationNotes: z.string().trim().max(5000).nullable().optional(),
   ownerId: z.string().uuid().nullable().optional(),
   nextAction: z.string().trim().max(1000).nullable().optional(),
   nextActionDueAt: z.coerce.date().nullable().optional(),
@@ -145,6 +207,31 @@ const inquirySchema = z.object({
 const statusSchema = z.object({
   status: z.enum(INQUIRY_STATUSES),
   reason: z.string().trim().max(5000).optional(),
+});
+
+const complianceVerificationSchema = z.object({
+  status: z.enum(['IN_PROGRESS', 'NEEDS_REVIEW', 'VERIFIED', 'FAILED']),
+  source: z.string().trim().max(1000).nullable().optional(),
+  categories: z.string().trim().max(3000).nullable().optional(),
+  links: z.string().trim().max(5000).nullable().optional(),
+  notes: z.string().trim().max(5000).nullable().optional(),
+});
+
+const savedComplianceLinkSchema = z.object({
+  title: z.string().trim().min(1).max(300),
+  url: z.string().trim().url().max(2000).refine((value) => {
+    try { return new URL(value).protocol === 'https:'; } catch { return false; }
+  }, 'Only HTTPS links can be saved.'),
+  domain: z.string().trim().min(1).max(255),
+  summary: z.string().trim().max(300).nullable().optional(),
+  authorityType: z.enum(['CITY', 'COUNTY', 'STATE', 'HOA', 'OTHER']),
+  authorityName: z.string().trim().min(1).max(200),
+}).superRefine((data, context) => {
+  try {
+    if (new URL(data.url).hostname.toLowerCase() !== data.domain.toLowerCase()) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['domain'], message: 'The source domain must match the link.' });
+    }
+  } catch { /* URL validation reports malformed values. */ }
 });
 
 const transitions: Record<string, string[]> = {
@@ -176,7 +263,7 @@ async function getAccessibleInquiry(req: AuthRequest, id: string) {
   if (req.user?.role === 'CLIENT' && inquiry.clientId !== req.user.clientId) {
     throw new AppError('Inquiry not found.', 404, 'NOT_FOUND');
   }
-  return presentInquiry(inquiry);
+  return presentInquiryForRole(inquiry, req.user?.role);
 }
 
 router.get('/properties', async (req: AuthRequest, res, next) => {
@@ -230,11 +317,11 @@ router.get('/inquiries', async (req: AuthRequest, res, next) => {
       prisma.inquiry.findMany({
         where, skip: pagination.skip, take: pagination.limit,
         orderBy: [{ nextActionDueAt: 'asc' }, { createdAt: 'desc' }],
-        include: { client: { select: { id: true, name: true, email: true, phone: true } }, property: true, owner: { select: { id: true, name: true } }, workItems: { where: { deletedAt: null }, orderBy: { dueAt: 'asc' } }, consultations: { where: { deletedAt: null }, select: { status: true } } },
+        include: { client: { select: { id: true, name: true, email: true, phone: true } }, property: true, owner: { select: { id: true, name: true } }, workItems: { where: { deletedAt: null }, orderBy: { dueAt: 'asc' } }, consultations: { where: { deletedAt: null }, select: { status: true, title: true, activityType: true, outcome: true } } },
       }),
       prisma.inquiry.count({ where }),
     ]);
-    res.json({ data: data.map(presentInquiry), pagination: getPaginationResult(total, pagination) });
+    res.json({ data: data.map((item) => presentInquiryForRole(item, req.user?.role)), pagination: getPaginationResult(total, pagination) });
   } catch (error) { next(error); }
 });
 
@@ -360,6 +447,9 @@ router.put('/inquiries/:id', async (req: AuthRequest, res, next) => {
   try {
     const before = await getAccessibleInquiry(req, req.params.id);
     const data = inquirySchema.partial().omit({ clientId: true }).parse(req.body);
+    if (req.user?.role === 'CLIENT' && data.romProposalDetails !== undefined) {
+      throw new AppError('Only an internal representative can edit the ROM proposal.', 403, 'FORBIDDEN');
+    }
     if (req.user?.role === 'CLIENT' && ['DECLINED', 'CONVERTED'].includes(before.qualificationStatus)) {
       throw new AppError('This inquiry is closed and can no longer be edited.', 409, 'INVALID_TRANSITION');
     }
@@ -375,6 +465,15 @@ router.put('/inquiries/:id', async (req: AuthRequest, res, next) => {
       throw new AppError('Only an internal representative can complete pre-design discovery.', 403, 'FORBIDDEN');
     }
     const { property: propertyData, discovery, ...inquiryData } = data;
+    const auditAction = req.user?.role === 'CLIENT'
+      ? 'CLIENT_UPDATE'
+      : data.romStatus !== undefined
+        ? 'ROM_DECISION'
+        : data.designAgreementStatus !== undefined
+          ? 'DESIGN_AGREEMENT_DECISION'
+          : data.handoffSummary !== undefined
+            ? 'HANDOFF_UPDATE'
+            : 'UPDATE';
     const inquiry = await prisma.$transaction(async (tx) => {
       let propertyId = before.propertyId;
       if (propertyData) {
@@ -400,7 +499,7 @@ router.put('/inquiries/:id', async (req: AuthRequest, res, next) => {
       });
       await writeAuditEvent(tx, {
         userId: req.user!.id,
-        action: req.user?.role === 'CLIENT' ? 'CLIENT_UPDATE' : 'UPDATE',
+        action: auditAction,
         entityType: 'Inquiry', entityId: updated.id, requestId: (req as any).requestId,
         before, after: { ...updated, property: propertyData || before.property },
       });
@@ -438,6 +537,125 @@ router.post('/inquiries/:id/status', async (req: AuthRequest, res, next) => {
     });
     await writeAuditEvent(prisma, { userId: req.user!.id, action: data.status, entityType: 'Inquiry', entityId: inquiry.id, requestId: (req as any).requestId, before, after: inquiry });
     res.json(inquiry);
+  } catch (error) { next(error); }
+});
+
+router.post('/inquiries/:id/compliance-verification', async (req: AuthRequest, res, next) => {
+  try {
+    requireInternal(req);
+    const before = await getAccessibleInquiry(req, req.params.id);
+    const data = complianceVerificationSchema.parse(req.body);
+    if (data.status === 'VERIFIED' && (!data.source || !data.categories)) {
+      throw new AppError('Verified compliance requires a source and categories.', 400, 'VALIDATION_ERROR');
+    }
+    const now = new Date();
+    const discovery = before.discovery && typeof before.discovery === 'object'
+      ? { ...before.discovery, ...(data.status === 'VERIFIED' ? { complianceFollowUpStatus: 'VERIFIED' } : {}) }
+      : null;
+    const inquiry = await prisma.inquiry.update({
+      where: { id: before.id },
+      data: {
+        complianceVerificationStatus: data.status,
+        complianceVerificationCheckedAt: now,
+        complianceVerificationSource: data.source || null,
+        complianceVerificationCategories: data.categories || null,
+        complianceVerificationLinks: data.links || null,
+        complianceVerificationNotes: data.notes || null,
+        complianceVerificationReviewedBy: data.status === 'VERIFIED' ? req.user!.id : null,
+        complianceVerificationReviewedAt: data.status === 'VERIFIED' ? now : null,
+        discoveryData: discovery ? JSON.stringify(discovery) : undefined,
+      },
+    });
+    await writeAuditEvent(prisma, { userId: req.user!.id, action: 'COMPLIANCE_VERIFY', entityType: 'Inquiry', entityId: inquiry.id, requestId: (req as any).requestId, before, after: inquiry });
+    res.json(await getAccessibleInquiry(req, inquiry.id));
+  } catch (error) { next(error); }
+});
+
+router.post('/inquiries/:id/compliance-research', async (req: AuthRequest, res, next) => {
+  try {
+    requireInternal(req);
+    const inquiry = await getAccessibleInquiry(req, req.params.id);
+    if (!inquiry.property?.address?.trim()) {
+      throw new AppError('Add a property address before starting compliance research.', 409, 'CONFLICT');
+    }
+    if (!isArizonaState(inquiry.property.state)) {
+      throw new AppError('Automated compliance research currently supports Arizona properties only. Set the property state to AZ and try again.', 422, 'VALIDATION_ERROR');
+    }
+    const savedLinks = await prisma.inquiryComplianceLink.findMany({ where: { inquiryId: inquiry.id }, orderBy: { addedAt: 'desc' } });
+    const activeJob = await prisma.complianceResearchJob.findFirst({
+      where: { inquiryId: inquiry.id, status: { in: ['QUEUED', 'RUNNING'] } },
+      include: { sources: { orderBy: { retrievedAt: 'desc' } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (activeJob) return res.status(202).json({ job: activeJob, savedLinks, verification: {
+      status: inquiry.complianceVerificationStatus,
+      categories: inquiry.complianceVerificationCategories,
+      links: inquiry.complianceVerificationLinks,
+      notes: inquiry.complianceVerificationNotes,
+      checkedAt: inquiry.complianceVerificationCheckedAt,
+    } });
+
+    const job = await prisma.$transaction(async (tx) => {
+      const created = await tx.complianceResearchJob.create({ data: { inquiryId: inquiry.id, requestedBy: req.user!.id } });
+      await tx.inquiry.update({ where: { id: inquiry.id }, data: { complianceVerificationStatus: 'IN_PROGRESS' } });
+      await writeAuditEvent(tx, {
+        userId: req.user!.id,
+        action: 'COMPLIANCE_RESEARCH_STARTED',
+        entityType: 'Inquiry',
+        entityId: inquiry.id,
+        requestId: (req as any).requestId,
+        details: { jobId: created.id },
+        after: { complianceVerificationStatus: 'IN_PROGRESS' },
+      });
+      return created;
+    });
+    res.status(202).json({ job: { ...job, sources: [] }, savedLinks, verification: { status: 'IN_PROGRESS' } });
+  } catch (error) { next(error); }
+});
+
+router.post('/inquiries/:id/compliance-links', async (req: AuthRequest, res, next) => {
+  try {
+    requireInternal(req);
+    const inquiry = await getAccessibleInquiry(req, req.params.id);
+    const data = savedComplianceLinkSchema.parse(req.body);
+    const link = await prisma.inquiryComplianceLink.upsert({
+      where: { inquiryId_url: { inquiryId: inquiry.id, url: data.url } },
+      create: { inquiryId: inquiry.id, ...data },
+      update: {},
+    });
+    await writeAuditEvent(prisma, {
+      userId: req.user!.id,
+      action: 'COMPLIANCE_SOURCE_SAVED',
+      entityType: 'Inquiry',
+      entityId: inquiry.id,
+      requestId: (req as any).requestId,
+      details: { savedLinkId: link.id, url: link.url, domain: link.domain },
+    });
+    res.status(200).json(link);
+  } catch (error) { next(error); }
+});
+
+router.get('/inquiries/:id/compliance-research', async (req: AuthRequest, res, next) => {
+  try {
+    requireInternal(req);
+    const inquiry = await getAccessibleInquiry(req, req.params.id);
+    const job = await prisma.complianceResearchJob.findFirst({
+      where: { inquiryId: inquiry.id },
+      include: { sources: { orderBy: { retrievedAt: 'desc' } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const savedLinks = await prisma.inquiryComplianceLink.findMany({ where: { inquiryId: inquiry.id }, orderBy: { addedAt: 'desc' } });
+    res.json({
+      job,
+      savedLinks,
+      verification: {
+        status: inquiry.complianceVerificationStatus,
+        categories: inquiry.complianceVerificationCategories,
+        links: inquiry.complianceVerificationLinks,
+        notes: inquiry.complianceVerificationNotes,
+        checkedAt: inquiry.complianceVerificationCheckedAt,
+      },
+    });
   } catch (error) { next(error); }
 });
 
@@ -480,12 +698,12 @@ router.post('/inquiries/:id/convert', async (req: AuthRequest, res, next) => {
     }
     if (before.qualificationStatus !== 'QUALIFIED') throw new AppError('Only qualified inquiries can be converted.', 409, 'INVALID_TRANSITION');
     await assertActiveAssignee(before.ownerId, 'Inquiry owner');
-    const consultation = before.consultations.find((item) => item.status === 'COMPLETED' && item.outcome && /site\s+meeting/i.test(item.title));
+    const consultation = before.consultations.find((item: any) => item.status === 'COMPLETED' && item.outcome && (item.activityType === 'SITE_MEETING' || /site\s+meeting/i.test(item.title)));
     const blockers = [
       !before.propertyId && 'Property is required.', !before.objectives && 'Objectives are required.',
       !before.preliminaryScope && 'Preliminary scope is required.', !before.ownerId && 'An owner is required.',
-      !consultation && 'A completed consultation outcome is required.',
-      before.workItems.some((item) => !['VERIFIED', 'CLOSED', 'CANCELLED'].includes(item.status)) && 'All missing-information requests must be verified.',
+      !consultation && 'At least one completed site meeting outcome is required.',
+      before.workItems.some((item: any) => !['VERIFIED', 'CLOSED', 'CANCELLED'].includes(item.status)) && 'All missing-information requests must be verified.',
       !discoveryIsComplete(before.discovery) && 'Pre-design discovery must be completed by a representative.',
     ].filter(Boolean).map((title) => ({ type: 'INQUIRY_REQUIREMENT', title }));
     const phaseThreeMissing = incompleteInquiryPhaseRequirements(before, 2);
@@ -509,8 +727,8 @@ router.post('/inquiries/:id/convert', async (req: AuthRequest, res, next) => {
       const created = await tx.poolProject.create({
         data: {
           clientId: before.clientId,
-          estimatedBudget: before.budgetExpectation,
-          notes: before.preliminaryScope,
+          estimatedBudget: before.romAmount || before.budgetExpectation,
+          notes: [before.preliminaryScope, before.handoffSummary ? `Design handoff summary:\n${before.handoffSummary}` : null].filter(Boolean).join('\n\n'),
           currentPhase: 1,
           status: 'INTAKE',
         },

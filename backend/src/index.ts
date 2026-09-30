@@ -39,6 +39,7 @@ import { validateEnvironment } from './utils/config';
 import { getDatabasePath, initializeDatabase } from './utils/database';
 import { canViewHealthDetails } from './utils/health';
 import { createGracefulShutdown } from './utils/shutdown';
+import { startComplianceResearchWorker } from './workers/complianceResearchWorker';
 
 dotenv.config();
 
@@ -196,6 +197,7 @@ app.use(errorHandler);
 
 if (require.main === module) {
   void initializeDatabase().then(() => {
+    startComplianceResearchWorker();
     const server = app.listen(PORT, HOST, () => {
       console.log(JSON.stringify({ level: 'info', event: 'server_started', host: HOST, port: Number(PORT) }));
       startBackupScheduler();
