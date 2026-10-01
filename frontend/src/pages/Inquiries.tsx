@@ -418,10 +418,15 @@ export default function Inquiries() {
   const openRequests = selected?.workItems?.filter((item)=>!terminalWorkStatuses.includes(item.status)) || [];
   const selectedDiscoveryProgress = discoveryProgress(discoveryForm);
   const selectedPhaseCompletions = selected ? inquiryPhaseDefinitions.map((_, index) => inquiryPhaseCompletion(selected, index)) : [];
-  const phaseUnlocked = (phaseIndex:number) => phaseIndex === 0 || selectedPhaseCompletions.slice(0, phaseIndex).every((phase) => phase.complete);
   const phaseOneComplete = Boolean(selectedPhaseCompletions[0]?.complete);
+  const phaseTwoBlockers = selected?.readiness?.phases.find((phase) => phase.id === 'PRE_DESIGN_DISCOVERY')?.blockers || [];
+  const canScheduleSiteMeetingEarly = phaseTwoBlockers.some((criterion) => criterion.id === 'SITE_MEETING_SCHEDULED')
+    && phaseTwoBlockers.every((criterion) => ['QUALIFICATION_APPROVAL', 'SITE_MEETING_SCHEDULED'].includes(criterion.id));
+  const phaseUnlocked = (phaseIndex:number) => phaseIndex === 0
+    || selectedPhaseCompletions.slice(0, phaseIndex).every((phase) => phase.complete)
+    || (phaseIndex === 2 && phaseOneComplete && canScheduleSiteMeetingEarly);
   const phaseTwoComplete = selected?.readiness
-    ? Boolean(selected.readiness.phases.find((phase) => phase.id === 'PRE_DESIGN_DISCOVERY')?.blockers.every((criterion) => criterion.id === 'QUALIFICATION_APPROVAL'))
+    ? phaseTwoBlockers.every((criterion) => criterion.id === 'QUALIFICATION_APPROVAL')
     : Boolean(selectedPhaseCompletions[1]?.complete);
   const criteriaForAdminReview = selected?.readiness?.criteria.filter((criterion) =>
     criterion.answerState === 'NEEDS_REVIEW'
