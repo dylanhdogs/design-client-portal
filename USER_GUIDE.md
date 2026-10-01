@@ -33,6 +33,8 @@ With the application running, visit <http://localhost:3000>.
 | Administrator | `admin@example.com` | `admin123` |
 | Client | `client@example.com` | `client123` |
 
+> These demo credentials are only for a local or fictional test database. Never use them on the live portal; production administrator accounts must be created through the one-time administrator bootstrap.
+
 Use Administrator when testing every internal control. Sign in as Client afterward to confirm the customer experience and privacy boundaries.
 
 > Test activity is saved in the local database. Approvals, stage advancement, purchase orders, and other actions affect the project's displayed state.

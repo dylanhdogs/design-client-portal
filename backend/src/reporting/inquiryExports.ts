@@ -61,6 +61,20 @@ export async function renderInquiryPdf(inquiry: any): Promise<Buffer> {
     equipmentPreferences: 'Equipment and automation preferences', heatingPreference: 'Heating or cooling preference', budgetRange: 'Working investment range',
     targetCompletion: 'Target completion or event date', priorityTradeoffs: 'Priority tradeoffs', knownConcerns: 'Known concerns or deal breakers', representativeNotes: 'Representative notes',
   };
+  const siteAssessmentLabels: Record<string, string> = {
+    poolLengthFt: 'Proposed pool length (ft)', poolWidthFt: 'Proposed pool width (ft)',
+    shallowDepthFt: 'Shallow depth (ft)', deepDepthFt: 'Deep depth (ft)', interiorFinishAreaSqFt: 'Pool interior finish area (sq ft)',
+    poolPerimeterFt: 'Pool perimeter / coping (linear ft)', deckAreaSqFt: 'New deck / paver area (sq ft)',
+    hardscapeRemovalSqFt: 'Existing hardscape to remove (sq ft)', yardPregradeAreaSqFt: 'Yard pre-grade area (sq ft)', spaDimensions: 'Spa size or dimensions',
+    equipmentAccessWidthFt: 'Narrowest equipment access (ft)', accessRouteNotes: 'Access route and obstacles',
+    excavationNotes: 'Excavation / soil conditions', gradingDrainageNotes: 'Grade, retaining, and drainage',
+    demolitionHaulNotes: 'Removal, disposal, and haul-off', restorationNotes: 'Yard restoration after construction',
+    equipmentPadDistanceFt: 'Pool to equipment-pad route (ft)', electricalRunFt: 'Electrical conduit run (ft)',
+    electricalServiceNotes: 'Panel, circuits, and electrical needs', gasRunFt: 'Gas line run (ft)', gasSourceAndUseNotes: 'Gas source and planned use',
+    utilityConstraints: 'Utilities, septic, wells, and easements', raisedWallDimensions: 'Raised / retaining feature walls', wallVeneerAreaSqFt: 'Wall veneer area (sq ft)',
+    waterFeatureCounts: 'Water features and quantities', scopeResponsibilities: 'Included scope and responsibility',
+    estimateAssumptions: 'Open questions, allowances, and exclusions',
+  };
 
   doc.rect(0, 0, doc.page.width, 120).fill(COLORS.navy);
   doc.font('Helvetica-Bold').fontSize(10).fillColor('#BFD7FF').text('SIGNATURE EXTERIORS DESIGN PORTAL', 48, 35);
@@ -115,6 +129,11 @@ export async function renderInquiryPdf(inquiry: any): Promise<Buffer> {
 
   section('Site meeting and feasibility');
   longValue('Site measurements, access, and feasibility notes', inquiry.siteAssessment);
+  const siteSurvey = inquiry.siteAssessmentData || {};
+  for (const [key, title] of Object.entries(siteAssessmentLabels)) {
+    const value = siteSurvey[key];
+    if (typeof value === 'string' && value.trim()) longValue(title, value);
+  }
   if (inquiry.consultations?.some((item: any) => /site\s+meeting/i.test(item.title || ''))) {
     inquiry.consultations
       .filter((item: any) => /site\s+meeting/i.test(item.title || ''))

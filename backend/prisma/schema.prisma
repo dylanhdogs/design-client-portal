@@ -386,6 +386,7 @@ model Inquiry {
   discoveryData       String?   @map("discovery_data")
   discoveryCompletedAt DateTime? @map("discovery_completed_at")
   siteAssessment      String?   @map("site_assessment")
+  siteAssessmentData  String?   @map("site_assessment_data")
   romAmount           String?   @map("rom_amount")
   proposalNarrative   String?   @map("proposal_narrative")
   romProposalDetails  String?   @map("rom_proposal_details")

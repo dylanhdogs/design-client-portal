@@ -1,13 +1,13 @@
 # Hostinger Plan Completion Audit
 
-Audit date: 2026-09-02
+Audit date: 2026-10-01
 
 This is the authoritative completion boundary for `HOSTINGER_DEPLOYMENT_PLAN.md`. “Implemented” means the required application code or operator artifact exists and has local evidence. It does not mean a hosted or owner-controlled gate has passed.
 
 | Scope | Current result | Authoritative evidence | What still proves completion |
 |---|---|---|---|
 | H0.1–H0.16 decisions | Not complete | `HOSTINGER_DECISION_REGISTER.md` contains recommended defaults and one runtime decision | Named owners must fill every final decision, date, and evidence field; repository/branch, provider recovery/renewal, DNS reversal, supported clients, evidence retention, and client-data request choices must exist |
-| H1.1–H1.22 application preparation | Complete locally | 34/34 tests, backend/frontend builds, 23 migrations, zero-vulnerability production audits, migration-23 performance and parity evidence | Exact Node 22 release-candidate run must be retained from the clean protected Git checkout used for deployment |
+| H1.1–H1.22 application preparation | Complete locally; protected-source gate pending | On 2026-10-01, the pinned Node v22.23.2 Linux verifier passed on an isolated temporary Git snapshot: 62/62 tests, Bash syntax, backend/frontend builds, fresh 39-migration database plus seed/backfill, production preflight, performance/parity checks, and zero reported production dependency vulnerabilities. This is local preflight only, not protected-release evidence. | Repeat the verifier from the clean protected Git checkout and exact commit that will be deployed; retain that manifest in the owner-controlled evidence index |
 | H2.1–H2.15 VPS provisioning/security | Implementation package complete; execution not complete | Provisioning, SSH hardening, fail2ban, UFW, Nginx/TLS, systemd, monitoring, bounded logs, inventory, host verifier, and DNS-reversal worksheet artifacts | Real Hostinger VPS/hPanel, DNS, TLS, firewall, restart, resource, synthetic-alert, account-recovery/renewal, completed DNS-reversal worksheet, and inventory evidence |
 | H3.1–H3.12 private staging | Implementation package complete; execution not complete | Isolated staging paths/service/domain template, Basic Authentication, noindex, deploy/rollback, manifest, smoke and verifier scripts | Private staging deployment; fictional users; restart/redeploy persistence; rollback; hosted health and access evidence |
 | Phase 4 ADMIN/STAFF/CLIENT acceptance | Not complete on hosted target | Local integration and rendered-role evidence; `ACCESSIBILITY_ACCEPTANCE_CHECKLIST.md` | All listed role workflows, approved browser/device matrix, client-data request rehearsal, keyboard, zoom/reflow, contrast, screen reader, concurrency, low-disk, restart, and log checks on staging; owner sign-off |
@@ -18,12 +18,15 @@ This is the authoritative completion boundary for `HOSTINGER_DEPLOYMENT_PLAN.md`
 
 ## Current verified local baseline
 
-- Backend and frontend production builds pass.
-- All 34 automated tests pass, including archived-client exclusion from direct workflow routes, automation scans, and active management reporting.
-- All 23 database migrations are applied and a fresh migration path is tested.
-- Performance passes at 80.78 ms p95 for 100 projects and 5,000 work items against a 500 ms threshold.
-- Parity passes for 2 current projects with zero discrepancies.
+- Backend and frontend production builds pass on the pinned Node v22.23.2 runtime.
+- All 62 automated backend tests pass.
+- All 39 database migrations apply to a fresh SQLite database; fictional demo seed and workflow backfill complete.
+- The demo seed refuses `NODE_ENV=production`; the deployment integration test verifies that a blocked seed leaves the production database empty.
+- Performance passes the 500 ms p95 threshold for 100 projects and 5,000 work items.
+- Parity passes for the seeded project with five lifecycle stages, four gates, and zero discrepancies.
 - Backend and frontend production dependency audits report zero known vulnerabilities.
+- Every Hostinger shell script passes `bash -n` in the release verifier.
+- The 2026-10-01 end-to-end verifier passed on an isolated Linux snapshot. Its temporary commit is not a protected Git release and must not be used as deployment authorization or release evidence.
 - Every Hostinger shell script passes Bash syntax validation.
 - The current production frontend bundle contains none of the known demonstration credentials or development JWT placeholder.
 

@@ -121,6 +121,46 @@ test('consultation API persists structured non-site activity metadata', async ()
   await prisma.consultation.delete({ where: { id: created.id } });
 });
 
+test('field survey saves for internal users and remains hidden from the client projection', async () => {
+  const inquiry = await prisma.inquiry.findUniqueOrThrow({ where: { id: testInquiryId }, select: { id: true, intakeRevision: true } });
+  const survey = { poolLengthFt: '32', equipmentAccessWidthFt: '8', excavationNotes: 'Verify rock conditions' };
+  const savedResponse = await request(`/api/inquiries/${inquiry.id}`, {
+    method: 'PUT',
+    headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedIntakeRevision: inquiry.intakeRevision, siteAssessmentData: survey }),
+  });
+  const saved = await savedResponse.json() as { intakeRevision: number; siteAssessmentData: Record<string, string> };
+  assert.equal(savedResponse.status, 200);
+  assert.equal(saved.siteAssessmentData.poolLengthFt, survey.poolLengthFt);
+  assert.equal(saved.siteAssessmentData.equipmentAccessWidthFt, survey.equipmentAccessWidthFt);
+  assert.equal(saved.siteAssessmentData.excavationNotes, survey.excavationNotes);
+  assert.deepEqual(
+    await prisma.inquiry.findUniqueOrThrow({ where: { id: inquiry.id }, select: { siteAssessmentData: true } }).then(({ siteAssessmentData }) => JSON.parse(siteAssessmentData!)),
+    saved.siteAssessmentData,
+  );
+
+  const previewResponse = await request(`/api/inquiries/${inquiry.id}/rom-preview`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedIntakeRevision: saved.intakeRevision }),
+  });
+  const preview = await previewResponse.json() as { snapshot: { sourceAnswers: Record<string, unknown> } };
+  assert.equal(previewResponse.status, 200);
+  assert.deepEqual(preview.snapshot.sourceAnswers.siteAssessmentData, saved.siteAssessmentData);
+
+  const clientResponse = await request(`/api/inquiries/${inquiry.id}`, { headers: { authorization: `Bearer ${clientToken}` } });
+  const clientView = await clientResponse.json() as Record<string, unknown>;
+  assert.equal(clientResponse.status, 200);
+  assert.equal(clientView.siteAssessmentData, undefined);
+
+  const clientEdit = await request(`/api/inquiries/${inquiry.id}`, {
+    method: 'PUT',
+    headers: { authorization: `Bearer ${clientToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedIntakeRevision: saved.intakeRevision, siteAssessmentData: survey }),
+  });
+  assert.equal(clientEdit.status, 403);
+});
+
 test('atomic intake save rolls back all writes when a client, property, or inquiry update fails', async () => {
   const suffix = crypto.randomUUID().replaceAll('-', '');
   const client = await prisma.client.create({ data: { name: 'Rollback test client', email: 'rollback-test@example.invalid', phone: '555-0100' } });

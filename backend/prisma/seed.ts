@@ -1,6 +1,10 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/utils/prisma';
 
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('The demo seed is disabled in production; bootstrap an administrator instead.');
+}
+
 export const phaseTemplates = [
   {
     name: 'INTAKE',

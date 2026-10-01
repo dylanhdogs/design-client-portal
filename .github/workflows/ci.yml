@@ -33,6 +33,10 @@ jobs:
         env:
           DATABASE_URL: file:./ci.db
           JWT_SECRET: ci-only-secret-with-at-least-thirty-two-characters
+      - run: npm run db:backfill
+        working-directory: backend
+        env:
+          DATABASE_URL: file:./ci.db
       - run: npm test
         working-directory: backend
         env:

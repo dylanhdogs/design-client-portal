@@ -15,6 +15,7 @@ import { isArizonaState } from '../services/complianceResearch';
 import { evaluateReceptionReadiness, getReceptionCriterion, hasReceptionCriterionAnswer } from '../workflow/receptionCriteria';
 import { initializeCriterionStates, refreshLegacyReviewStatus, saveCriterionState, syncExplicitCriterionChanges } from '../workflow/criterionState';
 import { RECEPTION_WORKFLOW_VERSION } from '../workflow/receptionCriteria';
+import { hasSiteAssessmentRecord } from '../workflow/siteAssessment';
 
 const router = express.Router();
 router.use(authenticate, loadClientData);
@@ -27,6 +28,36 @@ const propertySchema = z.object({
   jurisdiction: z.string().trim().max(150).nullable().optional(),
   hoaName: z.string().trim().max(150).nullable().optional(),
 });
+
+const siteAssessmentDataSchema = z.object({
+  poolLengthFt: z.string().trim().max(100).default(''),
+  poolWidthFt: z.string().trim().max(100).default(''),
+  shallowDepthFt: z.string().trim().max(100).default(''),
+  deepDepthFt: z.string().trim().max(100).default(''),
+  interiorFinishAreaSqFt: z.string().trim().max(100).default(''),
+  poolPerimeterFt: z.string().trim().max(100).default(''),
+  deckAreaSqFt: z.string().trim().max(100).default(''),
+  hardscapeRemovalSqFt: z.string().trim().max(100).default(''),
+  yardPregradeAreaSqFt: z.string().trim().max(100).default(''),
+  spaDimensions: z.string().trim().max(500).default(''),
+  equipmentAccessWidthFt: z.string().trim().max(100).default(''),
+  accessRouteNotes: z.string().trim().max(2000).default(''),
+  excavationNotes: z.string().trim().max(2000).default(''),
+  gradingDrainageNotes: z.string().trim().max(2000).default(''),
+  demolitionHaulNotes: z.string().trim().max(2000).default(''),
+  restorationNotes: z.string().trim().max(2000).default(''),
+  equipmentPadDistanceFt: z.string().trim().max(100).default(''),
+  electricalRunFt: z.string().trim().max(100).default(''),
+  electricalServiceNotes: z.string().trim().max(2000).default(''),
+  gasRunFt: z.string().trim().max(100).default(''),
+  gasSourceAndUseNotes: z.string().trim().max(2000).default(''),
+  utilityConstraints: z.string().trim().max(2000).default(''),
+  raisedWallDimensions: z.string().trim().max(1000).default(''),
+  wallVeneerAreaSqFt: z.string().trim().max(100).default(''),
+  waterFeatureCounts: z.string().trim().max(1000).default(''),
+  scopeResponsibilities: z.string().trim().max(2000).default(''),
+  estimateAssumptions: z.string().trim().max(3000).default(''),
+}).strict();
 
 const discoverySchema = z.object({
   projectType: z.string().trim().max(100).default(''),
@@ -106,7 +137,7 @@ export function inquiryPhaseRequirements(inquiry: any, phaseIndex: number) {
     ],
     [
       { title: 'All site meeting(s) completed with outcomes', complete: hasCompletedSiteMeeting && !hasScheduledSiteMeeting },
-      { title: 'Site measurements, access, and feasibility recorded', complete: hasText(inquiry.siteAssessment) },
+      { title: 'Site measurements, access, and feasibility recorded', complete: hasSiteAssessmentRecord(inquiry.siteAssessment, inquiry.siteAssessmentData) },
       { title: 'All client information requests resolved', complete: !hasOpenRequests },
       { title: 'Compliance review verified when applicable', complete: !complianceReviewRequired || inquiry.complianceVerificationStatus === 'VERIFIED' },
     ],
@@ -128,13 +159,17 @@ export function incompleteInquiryPhaseRequirements(inquiry: any, phaseIndex: num
   return inquiryPhaseRequirements(inquiry, phaseIndex).filter((requirement: { title: string; complete: boolean }) => !requirement.complete);
 }
 
-function presentInquiry<T extends { discoveryData?: string | null }>(inquiry: T) {
-  const { discoveryData, ...rest } = inquiry;
+function presentInquiry<T extends { discoveryData?: string | null; siteAssessmentData?: string | null }>(inquiry: T) {
+  const { discoveryData, siteAssessmentData: storedSiteAssessmentData, ...rest } = inquiry;
   let discovery: z.infer<typeof discoverySchema> | null = null;
   if (discoveryData) {
     try { discovery = discoverySchema.parse(JSON.parse(discoveryData)); } catch { discovery = null; }
   }
-  return { ...rest, discovery };
+  let siteAssessmentData: z.infer<typeof siteAssessmentDataSchema> | null = null;
+  if (storedSiteAssessmentData) {
+    try { siteAssessmentData = siteAssessmentDataSchema.parse(JSON.parse(storedSiteAssessmentData)); } catch { siteAssessmentData = null; }
+  }
+  return { ...rest, discovery, siteAssessmentData };
 }
 
 function presentInquiryForRole(inquiry: any, role?: string) {
@@ -145,6 +180,7 @@ function presentInquiryForRole(inquiry: any, role?: string) {
   }
   const {
     criterionStates: _criterionStates, handoffReviews: _handoffReviews, handoffReview: _handoffReview,
+    siteAssessmentData: _siteAssessmentData,
     activities: _activities, evidence: _evidence, romPreviewSnapshot: _romPreviewSnapshot,
     romPreviewHash: _romPreviewHash, romPreviewRevision: _romPreviewRevision, romPreviewSavedAt: _romPreviewSavedAt,
     clientDispositionReviewedBy: _clientDispositionReviewedBy, clientDispositionEvidenceActivityId: _clientDispositionEvidenceActivityId,
@@ -212,6 +248,7 @@ const inquirySchema = z.object({
   desiredTiming: z.string().trim().max(500).nullable().optional(),
   discovery: discoverySchema.optional(),
   siteAssessment: z.string().trim().max(10000).nullable().optional(),
+  siteAssessmentData: siteAssessmentDataSchema.nullable().optional(),
   romAmount: z.string().trim().max(500).nullable().optional(),
   proposalNarrative: z.string().trim().max(10000).nullable().optional(),
   romProposalDetails: z.string().max(30000).nullable().optional(),
@@ -494,6 +531,7 @@ function buildRomPreviewSnapshot(inquiry: any) {
       desiredTiming: inquiry.desiredTiming || null,
       discovery: inquiry.discovery || null,
       siteAssessment: inquiry.siteAssessment || null,
+      siteAssessmentData: inquiry.siteAssessmentData || null,
     },
     appliedOverrides: overrides,
     supplementalNarrative: inquiry.proposalNarrative || null,
@@ -640,6 +678,7 @@ router.post('/inquiries', async (req: AuthRequest, res, next) => {
   try {
     const data = inquirySchema.parse(req.body);
     if (req.user?.role === 'CLIENT' && !req.user.clientId) throw new AppError('Client account is not linked.', 409, 'CONFLICT');
+    if (req.user?.role === 'CLIENT' && data.siteAssessmentData !== undefined) throw new AppError('Only an internal representative can edit the field survey.', 403, 'FORBIDDEN');
     if (req.user?.role !== 'CLIENT' && !data.clientId && !data.lead) {
       throw new AppError('Select an existing lead or enter the lead contact details.', 400, 'VALIDATION_ERROR');
     }
@@ -713,6 +752,7 @@ router.post('/inquiries', async (req: AuthRequest, res, next) => {
           source: data.source, referralName: data.referralName, description: data.description,
           objectives: data.objectives, preliminaryScope: data.preliminaryScope,
           budgetExpectation: data.budgetExpectation, desiredTiming: data.desiredTiming,
+          siteAssessmentData: data.siteAssessmentData ? JSON.stringify(data.siteAssessmentData) : null,
           legacyReviewStatus: 'REVIEWED',
           ownerId: req.user?.role === 'CLIENT' ? null : data.ownerId,
           nextAction: req.user?.role === 'CLIENT' ? 'Review submitted inquiry' : data.nextAction,
@@ -1304,7 +1344,10 @@ router.put('/inquiries/:id', async (req: AuthRequest, res, next) => {
     if (req.user?.role === 'CLIENT' && data.discovery !== undefined) {
       throw new AppError('Only an internal representative can complete pre-design discovery.', 403, 'FORBIDDEN');
     }
-    const { property: propertyData, discovery, expectedIntakeRevision, ...inquiryData } = data;
+    if (req.user?.role === 'CLIENT' && data.siteAssessmentData !== undefined) {
+      throw new AppError('Only an internal representative can edit the field survey.', 403, 'FORBIDDEN');
+    }
+    const { property: propertyData, discovery, siteAssessmentData, expectedIntakeRevision, ...inquiryData } = data;
     const auditAction = req.user?.role === 'CLIENT'
       ? 'CLIENT_UPDATE'
       : data.romStatus !== undefined
@@ -1346,6 +1389,7 @@ router.put('/inquiries/:id', async (req: AuthRequest, res, next) => {
             discoveryData: JSON.stringify(discovery),
             discoveryCompletedAt: discoveryIsComplete(discovery) ? new Date() : null,
           } : {}),
+          ...(siteAssessmentData !== undefined ? { siteAssessmentData: siteAssessmentData ? JSON.stringify(siteAssessmentData) : null } : {}),
         },
       });
       const statefulUpdated = await getTransactionInquiry(tx, updated.id);

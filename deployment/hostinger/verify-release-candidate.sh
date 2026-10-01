@@ -30,11 +30,17 @@ run_check() {
   exit 1
 }
 
+run_check shell-syntax bash -c '
+  set -Eeuo pipefail
+  while IFS= read -r -d "" script; do bash -n "$script"; done < <(find "$1/deployment/hostinger" -type f -name "*.sh" -print0)
+' _ "$SOURCE_DIRECTORY"
 run_check root-install npm --prefix "$SOURCE_DIRECTORY" ci
 run_check backend-install npm --prefix "$SOURCE_DIRECTORY/backend" ci
 run_check frontend-install npm --prefix "$SOURCE_DIRECTORY/frontend" ci
-run_check fresh-migration npm --prefix "$SOURCE_DIRECTORY/backend" exec prisma migrate deploy
+run_check fresh-migration npm --prefix "$SOURCE_DIRECTORY/backend" exec -- prisma migrate deploy --schema "$SOURCE_DIRECTORY/backend/prisma/schema.prisma"
+run_check prisma-generate npm --prefix "$SOURCE_DIRECTORY/backend" exec -- prisma generate --schema "$SOURCE_DIRECTORY/backend/prisma/schema.prisma"
 run_check demo-seed npm --prefix "$SOURCE_DIRECTORY/backend" run db:seed
+run_check workflow-backfill npm --prefix "$SOURCE_DIRECTORY/backend" run db:backfill
 run_check backend-tests npm --prefix "$SOURCE_DIRECTORY/backend" test
 run_check backend-build npm --prefix "$SOURCE_DIRECTORY/backend" run build
 run_check frontend-build npm --prefix "$SOURCE_DIRECTORY/frontend" run build
@@ -82,17 +88,26 @@ source_sha256="$(tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --
 root_lock_sha256="$(sha256sum "$SOURCE_DIRECTORY/package-lock.json" | cut -d' ' -f1)"
 backend_lock_sha256="$(sha256sum "$SOURCE_DIRECTORY/backend/package-lock.json" | cut -d' ' -f1)"
 frontend_lock_sha256="$(sha256sum "$SOURCE_DIRECTORY/frontend/package-lock.json" | cut -d' ' -f1)"
-jq -n \
-  --arg releaseId "$RELEASE_ID" \
-  --arg verifiedAt "$(date --utc +%FT%TZ)" \
-  --arg node "$(node --version)" \
-  --arg npm "$(npm --version)" \
-  --arg commit "$verified_commit" \
-  --arg sourceSha256 "$source_sha256" \
-  --arg rootLockSha256 "$root_lock_sha256" \
-  --arg backendLockSha256 "$backend_lock_sha256" \
-  --arg frontendLockSha256 "$frontend_lock_sha256" \
-  '{releaseId:$releaseId,verifiedAt:$verifiedAt,node:$node,npm:$npm,commit:$commit,sourceSha256:$sourceSha256,lockfiles:{root:$rootLockSha256,backend:$backendLockSha256,frontend:$frontendLockSha256},checks:["root-install","backend-install","frontend-install","fresh-migration","demo-seed","backend-tests","backend-build","frontend-build","production-preflight","performance","parity","backend-audit","frontend-audit"],passed:true}' \
-  >"$EVIDENCE_DIRECTORY/release-verification.json"
+node - "$EVIDENCE_DIRECTORY/release-verification.json" "$RELEASE_ID" "$(date --utc +%FT%TZ)" "$(node --version)" "$(npm --version)" \
+  "$verified_commit" "$source_sha256" "$root_lock_sha256" "$backend_lock_sha256" "$frontend_lock_sha256" <<'NODE'
+const fs = require('node:fs');
+const [file, releaseId, verifiedAt, nodeVersion, npmVersion, commit, sourceSha256, rootLockSha256, backendLockSha256, frontendLockSha256] = process.argv.slice(2);
+const checks = [
+  'shell-syntax', 'root-install', 'backend-install', 'frontend-install', 'fresh-migration', 'prisma-generate', 'demo-seed', 'workflow-backfill',
+  'backend-tests', 'backend-build', 'frontend-build', 'production-preflight', 'performance', 'parity', 'backend-audit', 'frontend-audit',
+];
+const evidence = {
+  releaseId,
+  verifiedAt,
+  node: nodeVersion,
+  npm: npmVersion,
+  commit,
+  sourceSha256,
+  lockfiles: { root: rootLockSha256, backend: backendLockSha256, frontend: frontendLockSha256 },
+  checks,
+  passed: true,
+};
+fs.writeFileSync(file, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
+NODE
 chmod -R go-rwx "$EVIDENCE_DIRECTORY"
 echo "Release candidate $RELEASE_ID passed. Evidence: $EVIDENCE_DIRECTORY"

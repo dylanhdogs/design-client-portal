@@ -215,9 +215,10 @@ export interface Inquiry {
   discovery: PoolDiscovery | null;
   discoveryCompletedAt: string | null;
   siteAssessment: string | null;
-    romAmount: string | null;
-    proposalNarrative: string | null;
-    romProposalDetails: string | null;
+  siteAssessmentData?: SiteAssessmentData | null;
+  romAmount: string | null;
+  proposalNarrative: string | null;
+  romProposalDetails: string | null;
     proposalProvidedAt: string | null;
   proposalClientResponse: string | null;
   romStatus: string | null;
@@ -268,6 +269,36 @@ export interface Inquiry {
   documents?: Document[];
   workItems?: WorkItem[];
   project?: PoolProject | null;
+}
+
+export interface SiteAssessmentData {
+  poolLengthFt: string;
+  poolWidthFt: string;
+  shallowDepthFt: string;
+  deepDepthFt: string;
+  interiorFinishAreaSqFt: string;
+  poolPerimeterFt: string;
+  deckAreaSqFt: string;
+  hardscapeRemovalSqFt: string;
+  yardPregradeAreaSqFt: string;
+  spaDimensions: string;
+  equipmentAccessWidthFt: string;
+  accessRouteNotes: string;
+  excavationNotes: string;
+  gradingDrainageNotes: string;
+  demolitionHaulNotes: string;
+  restorationNotes: string;
+  equipmentPadDistanceFt: string;
+  electricalRunFt: string;
+  electricalServiceNotes: string;
+  gasRunFt: string;
+  gasSourceAndUseNotes: string;
+  utilityConstraints: string;
+  raisedWallDimensions: string;
+  wallVeneerAreaSqFt: string;
+  waterFeatureCounts: string;
+  scopeResponsibilities: string;
+  estimateAssumptions: string;
 }
 
 export interface ReceptionCriterionReadiness {

@@ -7,6 +7,7 @@ const projectRoot = path.resolve(__dirname, '..', '..');
 const read = (relativePath: string) => fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
 
 test('Hostinger package isolates staging and production', () => {
+  const ciWorkflow = read('.github/workflows/ci.yml');
   const service = read('deployment/hostinger/signature-portal@.service');
   const deploy = read('deployment/hostinger/deploy.sh');
   const rollback = read('deployment/hostinger/rollback.sh');
@@ -31,10 +32,18 @@ test('Hostinger package isolates staging and production', () => {
   assert.match(rollback, /flock -n/);
   assert.match(rollback, /original application links were restored/);
   const releaseVerifier = read('deployment/hostinger/verify-release-candidate.sh');
+  assert.match(releaseVerifier, /exec -- prisma migrate deploy --schema "\$SOURCE_DIRECTORY\/backend\/prisma\/schema\.prisma"/);
+  assert.match(releaseVerifier, /run_check shell-syntax bash -c/);
+  assert.match(releaseVerifier, /run_check prisma-generate npm --prefix "\$SOURCE_DIRECTORY\/backend" exec -- prisma generate --schema "\$SOURCE_DIRECTORY\/backend\/prisma\/schema\.prisma"/);
+  assert.match(releaseVerifier, /run_check workflow-backfill npm --prefix "\$SOURCE_DIRECTORY\/backend" run db:backfill/);
+  assert.match(releaseVerifier, /const checks = \[[\s\S]*'shell-syntax', 'root-install'[\s\S]*'fresh-migration', 'prisma-generate', 'demo-seed', 'workflow-backfill'/);
+  assert.match(releaseVerifier, /node - "\$EVIDENCE_DIRECTORY\/release-verification\.json"/);
+  assert.equal(releaseVerifier.includes('jq -n'), false);
   assert.match(releaseVerifier, /run_check production-preflight/);
   assert.match(releaseVerifier, /NODE_ENV=production/);
   assert.match(releaseVerifier, /release-verification\.invalid/);
-  assert.match(releaseVerifier, /checks:\[.*"production-preflight"/s);
+  assert.match(releaseVerifier, /const checks = \[[\s\S]*'production-preflight'/);
+  assert.match(ciWorkflow, /run: npm run db:seed[\s\S]*run: npm run db:backfill[\s\S]*run: npm run verify:parity/);
   assert.match(productionEnv, /PORT=4000/);
   assert.match(productionEnv, /HOST=127\.0\.0\.1/);
   assert.match(productionEnv, /signature-portal-production/);

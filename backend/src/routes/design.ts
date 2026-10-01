@@ -81,12 +81,16 @@ router.get('/projects/:projectId/design', async (req: AuthRequest, res, next) =>
     ]);
     let inquiryForDesign: Record<string, unknown> | null = null;
     if (inquiry) {
-      const { discoveryData, ...inquiryFields } = inquiry;
+      const { discoveryData, siteAssessmentData, ...inquiryFields } = inquiry;
       let discovery = null;
+      let siteSurvey = null;
       if (!clientView && discoveryData) {
         try { discovery = JSON.parse(discoveryData); } catch { discovery = null; }
       }
-      inquiryForDesign = { ...inquiryFields, discovery };
+      if (!clientView && siteAssessmentData) {
+        try { siteSurvey = JSON.parse(siteAssessmentData); } catch { siteSurvey = null; }
+      }
+      inquiryForDesign = { ...inquiryFields, discovery, siteAssessmentData: siteSurvey };
     }
     res.json({ project: { id: project.id, clientId: project.clientId, currentLifecycleStage: project.currentLifecycleStage }, client: { id: project.client.id, name: project.client.name }, inquiry: inquiryForDesign, properties, designVersions, scopeVersions, outstandingQuestions: questions, evidence, decisions });
   } catch (error) { next(error); }

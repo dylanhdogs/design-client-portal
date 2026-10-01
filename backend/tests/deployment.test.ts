@@ -40,6 +40,11 @@ test('production deploy stays empty until the one-time administrator bootstrap r
     isolated = new PrismaClient({ datasourceUrl: databaseUrl });
     assert.equal(await isolated.user.count(), 0, 'Production deploy must not create demo users.');
 
+    const demoSeed = runNpm(['run', 'db:seed'], { ...env, NODE_ENV: 'production' }, 60_000);
+    assert.notEqual(demoSeed.status, 0, 'The fixed-credential demo seed must refuse to run in production.');
+    assert.match(`${demoSeed.stdout}\n${demoSeed.stderr}`, /demo seed is disabled in production/i);
+    assert.equal(await isolated.user.count(), 0, 'A blocked production demo seed must leave the database empty.');
+
     const bootstrapEnv = {
       ...env,
       BOOTSTRAP_ADMIN_EMAIL: 'owner@signature.test',

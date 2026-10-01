@@ -1,3 +1,5 @@
+import { hasSiteAssessmentRecord } from './siteAssessment';
+
 export const RECEPTION_WORKFLOW_VERSION = 1;
 
 export type ReceptionRequirementClass = 'BLOCKING' | 'DEFERRABLE' | 'OPTIONAL';
@@ -45,7 +47,7 @@ export const RECEPTION_CRITERIA: ReceptionCriterionDefinition[] = [
   { id: 'DESIRED_TIMING', phase: 'PRE_DESIGN_DISCOVERY', label: 'Desired timing', requirement: 'DEFERRABLE', fieldPaths: ['inquiry.desiredTiming'] },
 
   { id: 'SITE_MEETING_OUTCOME', phase: 'SITE_MEETINGS_ROM', label: 'Completed onsite meeting with outcome', requirement: 'BLOCKING', fieldPaths: ['consultations.meetingMode', 'consultations.status', 'consultations.outcome'] },
-  { id: 'SITE_ASSESSMENT', phase: 'SITE_MEETINGS_ROM', label: 'Onsite assessment or no known constraints', requirement: 'BLOCKING', fieldPaths: ['inquiry.siteAssessment'] },
+  { id: 'SITE_ASSESSMENT', phase: 'SITE_MEETINGS_ROM', label: 'Onsite assessment or no known constraints', requirement: 'BLOCKING', fieldPaths: ['inquiry.siteAssessment', 'inquiry.siteAssessmentData'] },
   { id: 'SITE_EVIDENCE', phase: 'SITE_MEETINGS_ROM', label: 'Site evidence (optional)', requirement: 'OPTIONAL', fieldPaths: ['inquiry.evidence'] },
   { id: 'CLIENT_REQUESTS', phase: 'SITE_MEETINGS_ROM', label: 'Required client requests resolved or deferred', requirement: 'BLOCKING', fieldPaths: ['inquiry.workItems'] },
 
@@ -148,7 +150,7 @@ function answerPresent(inquiry: any, criterionId: string): boolean {
     case 'BUDGET_EXPECTATION': return Boolean(clean(inquiry.budgetExpectation));
     case 'DESIRED_TIMING': return Boolean(clean(inquiry.desiredTiming));
     case 'SITE_MEETING_OUTCOME': return consultations.some((item: any) => item.status === 'COMPLETED' && item.meetingMode === 'ONSITE' && Boolean(clean(item.outcome)));
-    case 'SITE_ASSESSMENT': return Boolean(clean(inquiry.siteAssessment));
+    case 'SITE_ASSESSMENT': return hasSiteAssessmentRecord(inquiry.siteAssessment, inquiry.siteAssessmentData);
     case 'SITE_EVIDENCE': return Array.isArray(inquiry.evidence) && inquiry.evidence.length > 0;
     case 'CLIENT_REQUESTS': return workItems.every((item: any) => !item.clientVisible || ['VERIFIED', 'CLOSED', 'CANCELLED'].includes(item.status));
     case 'PRELIMINARY_ROM': return Boolean(clean(inquiry.romAmount));
@@ -205,7 +207,7 @@ function hasLegacyValue(inquiry: any, criterionId: string): boolean {
     case 'BUDGET_EXPECTATION': return Boolean(clean(inquiry.budgetExpectation) || clean(discovery.budgetRange));
     case 'DESIRED_TIMING': return Boolean(clean(inquiry.desiredTiming) || clean(discovery.targetCompletion));
     case 'SITE_MEETING_OUTCOME': return consultations.some((item: any) => item.status === 'COMPLETED' && (item.activityType === 'SITE_MEETING' || /site\s+meeting/i.test(item.title || '')));
-    case 'SITE_ASSESSMENT': return Boolean(clean(inquiry.siteAssessment));
+    case 'SITE_ASSESSMENT': return hasSiteAssessmentRecord(inquiry.siteAssessment, inquiry.siteAssessmentData);
     case 'SITE_EVIDENCE': return Array.isArray(inquiry.documents) && inquiry.documents.length > 0;
     case 'CLIENT_REQUESTS': return workItems.some((item: any) => item.clientVisible && !['VERIFIED', 'CLOSED', 'CANCELLED'].includes(item.status));
     case 'PRELIMINARY_ROM': return Boolean(clean(inquiry.romAmount));
@@ -286,7 +288,7 @@ export function receptionCriterionFingerprint(inquiry: any, criterionId: string)
     case 'BUDGET_EXPECTATION': value = [inquiry.budgetExpectation, discovery.budgetRange]; break;
     case 'DESIRED_TIMING': value = [inquiry.desiredTiming, discovery.targetCompletion]; break;
     case 'SITE_MEETING_OUTCOME': value = consultations; break;
-    case 'SITE_ASSESSMENT': value = inquiry.siteAssessment; break;
+    case 'SITE_ASSESSMENT': value = [inquiry.siteAssessment, inquiry.siteAssessmentData]; break;
     case 'SITE_EVIDENCE': value = (inquiry.documents || []).map((item: any) => [item.id, item.category]); break;
     case 'CLIENT_REQUESTS': value = workItems; break;
     case 'PRELIMINARY_ROM': value = inquiry.romAmount; break;

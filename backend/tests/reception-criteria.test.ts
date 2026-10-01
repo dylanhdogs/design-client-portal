@@ -58,6 +58,19 @@ test('a legacy site-meeting candidate without explicit onsite mode cannot satisf
   assert.equal(criterion(result, 'SITE_MEETING_OUTCOME').complete, false);
 });
 
+test('structured field measurements satisfy the onsite assessment criterion once entered', () => {
+  const result = evaluateReceptionReadiness(inquiry({
+    legacyReviewStatus: 'REVIEWED',
+    siteAssessmentData: { poolLengthFt: '32', equipmentAccessWidthFt: '8' },
+  }));
+  assert.equal(criterion(result, 'SITE_ASSESSMENT').complete, true);
+  const empty = evaluateReceptionReadiness(inquiry({
+    legacyReviewStatus: 'REVIEWED',
+    siteAssessmentData: { poolLengthFt: '', equipmentAccessWidthFt: '' },
+  }));
+  assert.equal(criterion(empty, 'SITE_ASSESSMENT').complete, false);
+});
+
 test('survey Not applicable requires an Admin reason and attributable state update', () => {
   const result = evaluateReceptionReadiness(inquiry({
     legacyReviewStatus: 'REVIEWED',
