@@ -10,6 +10,7 @@ import { prisma } from '../src/utils/prisma';
 import { createPoolProjectWithPhases } from '../src/utils/poolProject';
 import { getUploadDirectory } from '../src/utils/storage';
 import { sanitizeSpreadsheetCell } from '../src/reporting/clientStatusExports';
+import { currentDateInZone } from '../src/reporting/clientStatus';
 
 let server: ReturnType<typeof app.listen>;
 let baseUrl = '';
@@ -172,17 +173,18 @@ test('client cannot list another client consultations', async () => {
 test('daily client status reports are internal, traceable, reusable, and exportable', async () => {
   assert.equal(sanitizeSpreadsheetCell('=HYPERLINK("https://malicious.invalid")'), '\'=HYPERLINK("https://malicious.invalid")');
   assert.equal(sanitizeSpreadsheetCell('@SUM(1+1)'), '\'@SUM(1+1)');
+  const asOfDate = currentDateInZone();
   const denied = await request(`/api/clients/${secondClientId}/status-reports`, {
     method: 'POST',
     headers: { authorization: `Bearer ${secondClientToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ projectId: secondProjectId, asOfDate: new Date().toISOString().slice(0, 10) }),
+    body: JSON.stringify({ projectId: secondProjectId, asOfDate }),
   });
   assert.equal(denied.response.status, 403);
 
   const generated = await request(`/api/clients/${secondClientId}/status-reports`, {
     method: 'POST',
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ projectId: secondProjectId, asOfDate: new Date().toISOString().slice(0, 10) }),
+    body: JSON.stringify({ projectId: secondProjectId, asOfDate }),
   });
   assert.equal(generated.response.status, 201);
   assert.equal(generated.body.generationMode, 'FACTS_ONLY');
@@ -194,7 +196,7 @@ test('daily client status reports are internal, traceable, reusable, and exporta
   const reused = await request(`/api/clients/${secondClientId}/status-reports`, {
     method: 'POST',
     headers: { authorization: `Bearer ${staffToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ projectId: secondProjectId, asOfDate: new Date().toISOString().slice(0, 10) }),
+    body: JSON.stringify({ projectId: secondProjectId, asOfDate }),
   });
   assert.equal(reused.response.status, 200);
   assert.equal(reused.body.id, generated.body.id);
@@ -215,7 +217,7 @@ test('daily client status reports are internal, traceable, reusable, and exporta
 
   const ownClientDenied = await request(`/api/clients/${clientId}/status-reports`, {
     method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ projectId: secondProjectId, asOfDate: new Date().toISOString().slice(0, 10) }),
+    body: JSON.stringify({ projectId: secondProjectId, asOfDate }),
   });
   assert.equal(ownClientDenied.response.status, 404);
   assert.equal(ownClientDenied.body.error.code, 'REPORT_NOT_FOUND');
@@ -706,7 +708,7 @@ test('inquiry submission, qualification, documents, consultation, and conversion
   const invalidTransition = await request(`/api/inquiries/${submitted.body.id}/status`, {
     method: 'POST',
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ status: 'QUALIFIED' }),
+    body: JSON.stringify({ status: 'QUALIFIED', expectedIntakeRevision: submitted.body.intakeRevision }),
   });
   assert.equal(invalidTransition.response.status, 409);
   assert.equal(invalidTransition.body.error.code, 'INVALID_TRANSITION');
@@ -714,19 +716,19 @@ test('inquiry submission, qualification, documents, consultation, and conversion
   const informationRequest = await request(`/api/inquiries/${submitted.body.id}/missing-information`, {
     method: 'POST',
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ title: 'Provide a recent site survey', dueAt: new Date(Date.now() + 86_400_000).toISOString() }),
+    body: JSON.stringify({ title: 'Provide a recent site survey', dueAt: new Date(Date.now() + 86_400_000).toISOString(), expectedIntakeRevision: submitted.body.intakeRevision }),
   });
   assert.equal(informationRequest.response.status, 201);
   assert.equal(informationRequest.body.type, 'MISSING_INFORMATION');
   assert.ok(await prisma.notification.count({ where: { itemId: informationRequest.body.id, type: 'MISSING_INFORMATION' } }));
 
-  const reviewStarted = await request(`/api/inquiries/${submitted.body.id}/status`, {
+  const phaseOneStarted = await request(`/api/inquiries/${submitted.body.id}/status`, {
     method: 'POST',
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ status: 'IN_REVIEW' }),
+    body: JSON.stringify({ status: 'IN_REVIEW', expectedIntakeRevision: submitted.body.intakeRevision + 1 }),
   });
-  assert.equal(reviewStarted.response.status, 409);
-  assert.equal(reviewStarted.body.error.code, 'GATE_BLOCKED');
+  assert.equal(phaseOneStarted.response.status, 409);
+  assert.equal(phaseOneStarted.body.error.code, 'GATE_BLOCKED');
 
   const clientUpdate = await request(`/api/inquiries/${submitted.body.id}`, {
     method: 'PUT',
@@ -734,6 +736,7 @@ test('inquiry submission, qualification, documents, consultation, and conversion
     body: JSON.stringify({
       preliminaryScope: 'Pool, patio, drainage review, and a recent site survey.',
       property: { address: '502 Updated Inquiry Way', city: 'Phoenix', state: 'AZ', postalCode: '85001' },
+      expectedIntakeRevision: submitted.body.intakeRevision + 1,
     }),
   });
   assert.equal(clientUpdate.response.status, 200);
@@ -753,7 +756,8 @@ test('inquiry submission, qualification, documents, consultation, and conversion
   assert.equal(duplicateSubmission.body.error.code, 'CONFLICT');
 
   const requestCompleted = await request(`/api/work-items/${informationRequest.body.id}/complete`, {
-    method: 'POST', headers: { authorization: `Bearer ${inquiryToken}` },
+    method: 'POST', headers: { authorization: `Bearer ${inquiryToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedIntakeRevision: clientUpdate.body.intakeRevision, idempotencyKey: `security-client-response-${crypto.randomUUID()}` }),
   });
   assert.equal(requestCompleted.response.status, 200);
   assert.equal(requestCompleted.body.status, 'READY_FOR_REVIEW');
@@ -783,75 +787,56 @@ test('inquiry submission, qualification, documents, consultation, and conversion
   const assigned = await request(`/api/inquiries/${submitted.body.id}`, {
     method: 'PUT',
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ ownerId: adminUserId, nextAction: 'Complete qualification review', nextActionDueAt: new Date(Date.now() + 86_400_000).toISOString() }),
+    body: JSON.stringify({ ownerId: adminUserId, nextAction: 'Complete qualification review', nextActionDueAt: new Date(Date.now() + 86_400_000).toISOString(), expectedIntakeRevision: requestCompleted.body.inquiryRevision }),
   });
   assert.equal(assigned.response.status, 200);
   assert.equal(await prisma.notification.count({ where: { inquiryId: submitted.body.id, type: 'INQUIRY_ASSIGNED', userId: adminUserId } }), 1);
 
-  const readiness = await request(`/api/inquiries/${submitted.body.id}`, {
-    method: 'PUT',
+  const reviewStarted = await request(`/api/inquiries/${submitted.body.id}/status`, {
+    method: 'POST',
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      discovery: {
-        projectType: 'Concrete pool and outdoor living', primaryUse: 'Family recreation',
-        decisionMakers: 'Inquiry Client and partner', propertyAccess: 'Open access through side gate',
-        siteConditions: 'Mostly level yard', utilities: 'Utilities identified', surveyStatus: 'Current survey on file',
-        mustHaveFeatures: 'Pool, shade, and outdoor kitchen', budgetRange: '$100,000-$150,000',
-        targetCompletion: 'Spring 2027',
-      },
-      siteAssessment: 'Access, utilities, and preliminary feasibility reviewed.',
-      romAmount: '$125,000', romStatus: 'APPROVED', romDecisionAt: new Date().toISOString(), romApprovedBy: adminUserId,
-      designAgreementStatus: 'ACCEPTED', designAgreementAcceptedAt: new Date().toISOString(), designAgreementAcceptedBy: adminUserId,
-      handoffSummary: 'ROM approved; proceed to Design with the documented scope and site constraints.',
-      handoffApprovedBy: adminUserId,
-    }),
+    body: JSON.stringify({ status: 'IN_REVIEW', expectedIntakeRevision: assigned.body.intakeRevision }),
   });
-  assert.equal(readiness.response.status, 200);
+  assert.equal(reviewStarted.response.status, 200);
 
-  for (const status of ['IN_REVIEW', 'QUALIFIED']) {
-    const changed = await request(`/api/inquiries/${submitted.body.id}/status`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    assert.equal(changed.response.status, 200);
-    assert.equal(changed.body.qualificationStatus, status);
-  }
+  const qualificationBlocked = await request(`/api/inquiries/${submitted.body.id}/status`, {
+    method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'QUALIFIED', expectedIntakeRevision: reviewStarted.body.intakeRevision }),
+  });
+  assert.equal(qualificationBlocked.response.status, 409);
+  assert.equal(qualificationBlocked.body.error.code, 'GATE_BLOCKED');
 
   const consultation = await request(`/api/clients/${inquiryClient.id}/consultations`, {
     method: 'POST',
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
     body: JSON.stringify({
-      title: 'Qualification consultation', date: new Date().toISOString(), status: 'COMPLETED',
-      inquiryId: submitted.body.id, outcome: 'Qualified for design and accepted by the client.',
+      title: 'Qualification discovery call', activityType: 'PHONE_CALL', meetingMode: 'PHONE',
+      date: new Date().toISOString(), status: 'COMPLETED', inquiryId: submitted.body.id,
+      outcome: 'Initial project goals and follow-up needs were discussed.',
+      expectedIntakeRevision: reviewStarted.body.intakeRevision,
     }),
   });
   assert.equal(consultation.response.status, 201);
   assert.equal(consultation.body.inquiryId, submitted.body.id);
 
-  const converted = await request(`/api/inquiries/${submitted.body.id}/convert`, {
-    method: 'POST', headers: { authorization: `Bearer ${adminToken}` },
+  const currentInquiry = await prisma.inquiry.findUniqueOrThrow({ where: { id: submitted.body.id }, select: { intakeRevision: true } });
+  const conversionBlocked = await request(`/api/inquiries/${submitted.body.id}/convert`, {
+    method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedIntakeRevision: currentInquiry.intakeRevision }),
   });
-  assert.equal(converted.response.status, 201);
-  assert.equal(converted.body.currentLifecycleStage, 'DESIGN');
-  assert.equal(converted.body.workflowEnabled, true);
+  assert.equal(conversionBlocked.response.status, 409);
+  assert.equal(conversionBlocked.body.error.code, 'INVALID_TRANSITION');
 
   const preserved = await prisma.inquiry.findUniqueOrThrow({
     where: { id: submitted.body.id },
-    include: { property: true, documents: true, consultations: true, project: true },
+    include: { property: true, documents: true, consultations: true },
   });
-  assert.equal(preserved.qualificationStatus, 'CONVERTED');
-  assert.equal(preserved.projectId, converted.body.id);
+  assert.equal(preserved.qualificationStatus, 'IN_REVIEW');
+  assert.equal(preserved.projectId, null);
   assert.equal(preserved.documents.length, 1);
   assert.equal(preserved.consultations.length, 1);
   assert.equal(preserved.property?.address, '502 Updated Inquiry Way');
-  assert.ok(await prisma.activityLog.count({ where: { entityType: 'Inquiry', entityId: submitted.body.id, action: 'CONVERT' } }));
-
-  const repeated = await request(`/api/inquiries/${submitted.body.id}/convert`, {
-    method: 'POST', headers: { authorization: `Bearer ${adminToken}` },
-  });
-  assert.equal(repeated.response.status, 200);
-  assert.equal(repeated.body.id, converted.body.id);
+  assert.equal(await prisma.activityLog.count({ where: { entityType: 'Inquiry', entityId: submitted.body.id, action: 'CONVERT' } }), 0);
 });
 
 test('design and scope versions preserve history, evidence, approvals, and stale gates', async () => {

@@ -7,8 +7,14 @@ export type AppErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
+  | 'STALE_INTAKE_REVISION'
   | 'GATE_BLOCKED'
   | 'INVALID_TRANSITION'
+  | 'INVALID_CRITERION_FOLLOW_UP'
+  | 'IDEMPOTENCY_KEY_REUSED'
+  | 'ROM_NOT_PRESENTED'
+  | 'DISPOSITION_PENDING_REVIEW'
+  | 'STALE_DISPOSITION'
   | 'SEPARATION_OF_DUTIES'
   | 'REPORT_INVALID_DATE'
   | 'REPORT_NOT_FOUND'
@@ -106,8 +112,8 @@ export const errorHandler = (err: any, req: any, res: any, next: any) => {
         error: { code: 'NOT_FOUND', message: 'Record not found.' },
       });
     }
-    return res.status(400).json({
-      error: { code: 'VALIDATION_ERROR', message: 'Database request failed.' },
+    return res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'Database request failed.' },
     });
   }
 

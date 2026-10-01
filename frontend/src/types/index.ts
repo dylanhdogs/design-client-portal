@@ -38,12 +38,14 @@ export interface Consultation {
   userId: string;
   title: string;
   activityType: 'SITE_MEETING' | 'PHONE_CALL' | 'VIDEO_CALL' | 'HOA_ARC' | 'MUNICIPAL' | 'OTHER';
+  meetingMode?: 'ONSITE' | 'PHONE' | 'VIDEO' | null;
   subject: string | null;
   date: string;
   endAt: string | null;
   notes: string | null;
   status: string;
   inquiryId?: string | null;
+  criterionId?: string | null;
   outcome?: string | null;
   participants?: string | null;
   internalFollowers?: string | null;
@@ -236,6 +238,24 @@ export interface Inquiry {
   complianceVerificationReviewedAt: string | null;
   complianceVerificationNotes: string | null;
   qualificationStatus: string;
+  intakeRevision: number;
+  legacyReviewStatus?: 'PENDING' | 'REVIEWED' | 'PRESERVED_CONVERTED' | 'CLOSED_HISTORY';
+  clientDisposition?: 'PROCEED_TO_DESIGN' | 'MORE_INFORMATION' | 'PAUSE' | 'DECLINE' | null;
+  clientDispositionComment?: string | null;
+  clientDispositionSource?: string | null;
+  clientDispositionAt?: string | null;
+  clientDispositionReviewStatus?: string | null;
+  clientDispositionEvidenceActivityId?: string | null;
+  clientRomPreview?: ClientRomPreview | null;
+  clientCanRespondToRom?: boolean;
+  pendingClientDisposition?: { disposition: 'PROCEED_TO_DESIGN' | 'MORE_INFORMATION' | 'PAUSE' | 'DECLINE'; submittedAt: string; romSnapshot?: ClientRomPreview | null } | null;
+  romPreviewSnapshot?: string | null;
+  romPreviewHash?: string | null;
+  romPreviewRevision?: number | null;
+  handoffReview?: InquiryHandoffReview | null;
+  activities?: InquiryActivity[];
+  evidence?: InquiryEvidence[];
+  readiness?: ReceptionReadiness;
   ownerId: string | null;
   nextAction: string | null;
   nextActionDueAt: string | null;
@@ -248,6 +268,107 @@ export interface Inquiry {
   documents?: Document[];
   workItems?: WorkItem[];
   project?: PoolProject | null;
+}
+
+export interface ReceptionCriterionReadiness {
+  id: string;
+  phase: string;
+  label: string;
+  requirement: 'BLOCKING' | 'DEFERRABLE' | 'OPTIONAL';
+  fieldPaths: string[];
+  notApplicableAllowed?: boolean;
+  answerState: 'CONFIRMED' | 'PRELIMINARY' | 'UNKNOWN' | 'NOT_APPLICABLE' | 'NEEDS_REVIEW';
+  source: string;
+  reason: string | null;
+  hasAnswer: boolean;
+  complete: boolean;
+  deferred: boolean;
+  blocker: string | null;
+}
+
+export interface InquiryActivity {
+  id: string;
+  inquiryId: string;
+  clientId: string;
+  actorId: string | null;
+  origin: 'ADMIN' | 'CLIENT_PORTAL' | 'SYSTEM';
+  channel: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  contactPerson: string | null;
+  occurredAt: string;
+  organizationTimezone: string;
+  summary: string;
+  outcomeCode: string;
+  outcomeDetail: string | null;
+  clientDispositionValue: string | null;
+  clientRomSnapshot?: string | null;
+  clientRomSnapshotHash?: string | null;
+  followUpWorkItem?: WorkItem | null;
+  correctionOfActivityId?: string | null;
+  correctionJson?: string | null;
+  actor?: { id: string; name: string } | null;
+  documents?: Array<{ document: Document }>;
+}
+
+export interface ClientRomPreview {
+  version: number;
+  label: string;
+  nonBindingNotice: string;
+  intakeRevision: number;
+  range: string | null;
+  sourceAnswers: {
+    clientName: string | null;
+    property: { address: string | null; city: string | null; state: string | null; postalCode: string | null };
+    projectDescription: string | null;
+    objectives: string | null;
+    preliminaryScope: string | null;
+    budgetExpectation: string | null;
+    desiredTiming: string | null;
+  };
+  proposal: Record<string, string>;
+  supplementalNarrative: string | null;
+  presentedAt: string | null;
+}
+
+export interface InquiryEvidence {
+  id: string;
+  inquiryId: string;
+  documentId: string;
+  category: 'SITE_PHOTO' | 'SITE_PLAN' | 'SURVEY' | 'OTHER_SITE_EVIDENCE';
+  createdAt: string;
+  document?: Document;
+  actor?: { id: string; name: string };
+}
+
+export interface InquiryHandoffReview {
+  id: string;
+  inquiryId: string;
+  reviewerId: string;
+  result: 'APPROVED' | 'RETURNED';
+  intakeRevision: number;
+  workflowVersion: number;
+  checklistSnapshot: string;
+  checklistHash: string;
+  romPreviewSnapshot: string;
+  romPreviewHash: string;
+  reason: string | null;
+  reviewedAt: string;
+}
+
+export interface ReceptionPhaseReadiness {
+  id: string;
+  label: string;
+  state: 'IN_PROGRESS' | 'READY_WITH_DEFERRED_ITEMS' | 'COMPLETE';
+  criteria: ReceptionCriterionReadiness[];
+  blockers: ReceptionCriterionReadiness[];
+  deferred: ReceptionCriterionReadiness[];
+}
+
+export interface ReceptionReadiness {
+  workflowVersion: number;
+  activeReceptionPhase: string | null;
+  phases: ReceptionPhaseReadiness[];
+  criteria: ReceptionCriterionReadiness[];
 }
 
 export interface ComplianceResearchSource {

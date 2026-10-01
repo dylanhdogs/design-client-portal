@@ -105,9 +105,9 @@ export const clientApi = {
 
 export const consultationApi = {
   getAll: (clientId: string) => api.get(`/clients/${clientId}/consultations`),
-  create: (clientId: string, data: Partial<Consultation>) =>
+  create: (clientId: string, data: Partial<Consultation> & { expectedIntakeRevision?: number }) =>
     api.post(`/clients/${clientId}/consultations`, data),
-  update: (clientId: string, id: string, data: Partial<Consultation>) =>
+  update: (clientId: string, id: string, data: Partial<Consultation> & { expectedIntakeRevision?: number }) =>
     api.put(`/clients/${clientId}/consultations/${id}`, data),
   delete: (clientId: string, id: string) => api.delete(`/clients/${clientId}/consultations/${id}`)
 };
@@ -233,7 +233,7 @@ export const workflowApi = {
   getCommandCenter: (projectId: string) => api.get(`/projects/${projectId}/command-center`),
   createWorkItem: (projectId: string, data: Record<string, unknown>) => api.post(`/projects/${projectId}/work-items`, data),
   updateWorkItem: (id: string, data: Record<string, unknown>) => api.put(`/work-items/${id}`, data),
-  completeWorkItem: (id: string) => api.post(`/work-items/${id}/complete`),
+  completeWorkItem: (id: string, data?: { expectedIntakeRevision?: number; idempotencyKey?: string }) => api.post(`/work-items/${id}/complete`, data),
   verifyWorkItem: (id: string) => api.post(`/work-items/${id}/verify`),
   createDecision: (projectId: string, data: Record<string, unknown>) => api.post(`/projects/${projectId}/decisions`, data),
   approveDecision: (id: string, data: Record<string, unknown>) => api.post(`/decisions/${id}/approve`, data),
@@ -260,15 +260,33 @@ export const inquiryApi = {
     URL.revokeObjectURL(link.href);
   },
   create: (data: Record<string, unknown>) => api.post('/inquiries', data),
-  update: (id: string, data: Record<string, unknown>) => api.put(`/inquiries/${id}`, data),
-  saveDiscovery: (id: string, discovery: object) => api.put(`/inquiries/${id}`, { discovery }),
-  verifyCompliance: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/compliance-verification`, data),
-  startComplianceResearch: (id: string) => api.post(`/inquiries/${id}/compliance-research`),
+  update: (id: string, data: Record<string, unknown>, expectedIntakeRevision: number) =>
+    api.put(`/inquiries/${id}`, { ...data, expectedIntakeRevision }),
+  updateIntake: (id: string, data: Record<string, unknown>) => api.put(`/inquiries/${id}/intake`, data),
+  saveDiscovery: (id: string, discovery: object, expectedIntakeRevision: number) =>
+    api.put(`/inquiries/${id}`, { discovery, expectedIntakeRevision }),
+  setCriterionState: (id: string, criterionId: string, data: { answerState: 'CONFIRMED' | 'UNKNOWN' | 'NOT_APPLICABLE'; reason?: string | null; answerValue?: string }, expectedIntakeRevision: number) =>
+    api.put(`/inquiries/${id}/criteria/${encodeURIComponent(criterionId)}/state`, { ...data, expectedIntakeRevision }),
+  verifyCompliance: (id: string, data: Record<string, unknown>, expectedIntakeRevision: number) =>
+    api.post(`/inquiries/${id}/compliance-verification`, { ...data, expectedIntakeRevision }),
+  startComplianceResearch: (id: string, expectedIntakeRevision: number) =>
+    api.post(`/inquiries/${id}/compliance-research`, { expectedIntakeRevision }),
   getComplianceResearch: (id: string) => api.get(`/inquiries/${id}/compliance-research`),
-  addComplianceLink: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/compliance-links`, data),
-  setStatus: (id: string, status: string, reason?: string) => api.post(`/inquiries/${id}/status`, { status, reason }),
-  convert: (id: string) => api.post(`/inquiries/${id}/convert`),
-  requestInformation: (id: string, data: { title: string; description?: string; dueAt: string }) => api.post(`/inquiries/${id}/missing-information`, data),
+  addComplianceLink: (id: string, data: Record<string, unknown>, expectedIntakeRevision: number) =>
+    api.post(`/inquiries/${id}/compliance-links`, { ...data, expectedIntakeRevision }),
+  setStatus: (id: string, status: string, expectedIntakeRevision: number, reason?: string) =>
+    api.post(`/inquiries/${id}/status`, { status, reason, expectedIntakeRevision }),
+  convert: (id: string, expectedIntakeRevision: number) => api.post(`/inquiries/${id}/convert`, { expectedIntakeRevision }),
+  requestInformation: (id: string, data: { title: string; description?: string; dueAt: string }, expectedIntakeRevision: number) =>
+    api.post(`/inquiries/${id}/missing-information`, { ...data, expectedIntakeRevision }),
+  activities: (id: string) => api.get(`/inquiries/${id}/activities`),
+  logActivity: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/activities`, data),
+  correctActivity: (id: string, activityId: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/activities/${activityId}/corrections`, data),
+  addEvidence: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/evidence`, data),
+  saveRomPreview: (id: string, expectedIntakeRevision: number) => api.post(`/inquiries/${id}/rom-preview`, { expectedIntakeRevision }),
+  submitDispositionResponse: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/disposition-responses`, data),
+  reviewDisposition: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/disposition`, data),
+  reviewHandoff: (id: string, data: { expectedIntakeRevision: number; workflowVersion: number; reason?: string }) => api.post(`/inquiries/${id}/handoff-review`, data),
 };
 
 export const designApi = {

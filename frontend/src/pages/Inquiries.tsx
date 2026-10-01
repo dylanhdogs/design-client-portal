@@ -5,7 +5,7 @@ import { authApi, clientApi, consultationApi, getApiErrorMessage, inquiryApi } f
 import FormModal from '../components/FormModal';
 import DocumentUpload from '../components/DocumentUpload';
 import { useAuth } from '../context/AuthContext';
-import { Client, ComplianceResearchSnapshot, ComplianceResearchSource, Consultation, Inquiry, PoolDiscovery, User } from '../types';
+import { Client, ComplianceResearchSnapshot, ComplianceResearchSource, Consultation, Inquiry, InquiryActivity, PoolDiscovery, ReceptionCriterionReadiness, User } from '../types';
 
 const statuses = ['NEW', 'IN_REVIEW', 'QUALIFIED', 'DECLINED', 'NURTURED', 'CONVERTED'];
 const sourceOptions = ['PHONE', 'SMS', 'EMAIL', 'WEBSITE', 'REFERRAL', 'WALK_IN', 'OTHER'];
@@ -95,8 +95,8 @@ const siteMeetingNextStepOptions = ['Prepare concept direction', 'Request survey
 const workflowQueueDefinitions = [
   { key: 'ATTENTION', label: 'Initial Contact Made', shortLabel: 'Initial contact', statuses: ['NEW'], description: 'Lead has been reached and the project record is being started.' },
   { key: 'PROGRESS', label: 'Pre-Design Discovery', shortLabel: 'Pre-design discovery', statuses: ['IN_REVIEW'], description: 'The inquiry is in qualification and the representative is completing the discovery record.' },
-  { key: 'READY', label: 'Site Meetings & ROM Preparation', shortLabel: 'Site meetings and ROM', statuses: ['QUALIFIED'], description: 'Discovery is complete; site meetings, feasibility, and ROM readiness are being prepared for Design.' },
-  { key: 'CLOSED', label: 'Design Handoff Complete', shortLabel: 'Design handoff', statuses: ['CONVERTED'], description: 'ROM approval is complete and the inquiry has moved into Design.' },
+  { key: 'READY', label: 'Site Meetings & ROM Preparation', shortLabel: 'Site meetings and ROM', statuses: ['QUALIFIED'], description: 'The onsite meeting and feasibility work are underway.' },
+  { key: 'HANDOFF', label: 'ROM Approval & Design Handoff', shortLabel: 'ROM and handoff', statuses: [], description: 'Prepare, review, present, and disposition the preliminary ROM.' },
 ];
 const workflowStatusLabels: Record<string, string> = {
   NEW: 'Initial contact', IN_REVIEW: 'In review', QUALIFIED: 'Site meeting and ROM readiness', CONVERTED: 'ROM approval and handoff',
@@ -108,6 +108,51 @@ const statusColor: Record<string, string> = {
   QUALIFIED: 'bg-emerald-100 text-emerald-800', CONVERTED: 'bg-violet-100 text-violet-800',
   DECLINED: 'bg-red-100 text-red-800', NURTURED: 'bg-gray-100 text-gray-800',
 };
+
+function legacyCriterionPreview(inquiry: Inquiry, criterionId: string): string {
+  const record = inquiry as any;
+  const discovery = record.discovery || {};
+  const consultations = record.consultations || [];
+  const workItems = record.workItems || [];
+  const meetingLabel = (meeting: any) => [meeting.meetingMode || 'mode not recorded', meeting.status, meeting.date ? new Date(meeting.date).toLocaleString() : 'date not recorded'].join(' · ');
+  const values: Record<string, unknown> = {
+    CONTACT_IDENTITY: record.client?.name,
+    CONTACT_METHOD: record.client?.email || record.client?.phone,
+    INCOMING_CHANNEL: record.source,
+    RECEPTION_OWNER: record.owner?.name || (record.ownerId ? 'Assigned owner; current owner profile unavailable' : null),
+    INITIAL_NEXT_ACTION: [record.nextAction, record.nextActionDueAt ? new Date(record.nextActionDueAt).toLocaleDateString() : null].filter(Boolean).join(' · '),
+    PROPERTY_IDENTIFIED: record.property?.address,
+    PROJECT_TYPE: discovery.projectType,
+    PRIMARY_USE: discovery.primaryUse,
+    DESIRED_OUTCOME: record.objectives,
+    DECISION_MAKERS: discovery.decisionMakers,
+    PROPERTY_ACCESS: discovery.propertyAccess,
+    REPORTED_SITE_CONDITIONS: discovery.siteConditions,
+    UTILITIES: discovery.utilities,
+    SURVEY_STATUS: discovery.surveyStatus,
+    MUST_HAVE_FEATURES: discovery.mustHaveFeatures,
+    QUALIFICATION_APPROVAL: record.qualificationStatus,
+    INSPIRATION_STATUS: record.designInspirations,
+    SITE_MEETING_SCHEDULED: consultations.filter((item: any) => item.activityType === 'SITE_MEETING' || /site\s+meeting/i.test(item.title || '')).map(meetingLabel).join('; '),
+    BUDGET_EXPECTATION: [record.budgetExpectation, discovery.budgetRange].filter(Boolean).join(' · '),
+    DESIRED_TIMING: [record.desiredTiming, discovery.targetCompletion].filter(Boolean).join(' · '),
+    SITE_MEETING_OUTCOME: consultations.filter((item: any) => item.activityType === 'SITE_MEETING' || /site\s+meeting/i.test(item.title || '')).map((item: any) => item.outcome).filter(Boolean).join('; '),
+    SITE_ASSESSMENT: record.siteAssessment,
+    SITE_EVIDENCE: (record.documents || []).map((item: any) => item.description || item.fileName || item.category).filter(Boolean).join(', '),
+    CLIENT_REQUESTS: workItems.filter((item: any) => item.clientVisible).map((item: any) => `${item.title || item.description || 'Client request'} (${item.status})`).join('; '),
+    PRELIMINARY_ROM: record.romAmount,
+    PRELIMINARY_BRIEF: record.handoffReview?.romPreviewSnapshot ? 'A reviewed ROM preview snapshot is saved.' : record.romProposalDetails || record.proposalNarrative,
+    PROPOSAL_PRESENTED_AT: record.proposalProvidedAt ? new Date(record.proposalProvidedAt).toLocaleString() : null,
+    ROM_APPROVAL: [record.romStatus, record.romDecisionAt ? new Date(record.romDecisionAt).toLocaleDateString() : null].filter(Boolean).join(' · '),
+    DESIGN_AGREEMENT: record.designAgreementStatus,
+    CLIENT_DISPOSITION: record.clientDisposition,
+    HANDOFF_REVIEW: record.handoffReview?.result,
+  };
+  const raw = values[criterionId];
+  const summary = Array.isArray(raw) ? raw.filter(Boolean).join(', ') : String(raw || '').trim();
+  if (!summary) return 'No saved answer is available in the inquiry fields.';
+  return summary.length > 240 ? `${summary.slice(0, 237)}…` : summary;
+}
 type TabKey = 'INTAKE' | 'QUESTIONS' | 'SCHEDULE' | 'FILES' | 'HANDOFF';
 type DiscoverySubTab = 'QUESTIONS' | 'COMMUNITY' | 'CALL_TRACKER';
 type RomProposalField = 'projectNarrative' | 'designBuildOverview' | 'proposedScope' | 'exclusions' | 'designDeliverables' | 'clientResponsibilities' | 'milestones' | 'allowancesOptions' | 'assumptions' | 'depositTerms' | 'nextSteps';
@@ -215,6 +260,17 @@ function inquiryPhaseRequirements(inquiry: Inquiry, phaseIndex: number) {
   if (inquiry.qualificationStatus === 'CONVERTED' && inquiry.projectId) {
     return (phaseRequirements[phaseIndex] || []).map((requirement) => ({ ...requirement, complete: true }));
   }
+  const serverPhase = inquiry.readiness?.phases[phaseIndex];
+  if (serverPhase) {
+    return serverPhase.criteria.map((criterion) => ({
+      label: criterion.label,
+      complete: criterion.complete,
+      criterionId: criterion.id,
+      blocker: criterion.blocker,
+      deferred: criterion.deferred,
+      answerState: criterion.answerState,
+    }));
+  }
   return phaseRequirements[phaseIndex] || [];
 }
 function inquiryPhaseCompletion(inquiry: Inquiry, phaseIndex: number) {
@@ -235,9 +291,16 @@ function handoffBlockers(inquiry: Inquiry) {
   return missing;
 }
 function queueGroup(inquiry: Inquiry) {
-  const stage = workflowQueueDefinitions.find((definition) => definition.statuses.includes(inquiry.qualificationStatus));
-  if (stage) return stage.key;
   if (['DECLINED','NURTURED'].includes(inquiry.qualificationStatus)) return 'ARCHIVED';
+  if (inquiry.qualificationStatus === 'CONVERTED') return 'CLOSED';
+  const stageByPhase: Record<string, string> = {
+    INITIAL_CONTACT: 'ATTENTION',
+    PRE_DESIGN_DISCOVERY: 'PROGRESS',
+    SITE_MEETINGS_ROM: 'READY',
+    ROM_HANDOFF: 'HANDOFF',
+  };
+  const stage = inquiry.readiness?.activeReceptionPhase;
+  if (stage && stageByPhase[stage]) return stageByPhase[stage];
   return 'ATTENTION';
 }
 
@@ -265,15 +328,28 @@ export default function Inquiries() {
   const [outcomeSpecific,setOutcomeSpecific] = useState('');
   const [outcomeSpecifics,setOutcomeSpecifics] = useState<string[]>([]);
   const [informationRequest,setInformationRequest] = useState('');
+  const [contactChannel,setContactChannel] = useState<'PHONE'|'SMS'|'EMAIL'|'WEBSITE'|'IN_PERSON'|'REFERRAL'|'OTHER'>('PHONE');
+  const [contactDirection,setContactDirection] = useState<'INBOUND'|'OUTBOUND'>('INBOUND');
+  const [contactPerson,setContactPerson] = useState('');
+  const [contactSummary,setContactSummary] = useState('');
+  const [contactOutcome,setContactOutcome] = useState('CONNECTED');
+  const [externalDispositionChannel,setExternalDispositionChannel] = useState<'PHONE'|'SMS'|'EMAIL'|'IN_PERSON'|'OTHER'>('PHONE');
+  const [externalDisposition,setExternalDisposition] = useState<'PROCEED_TO_DESIGN'|'MORE_INFORMATION'|'PAUSE'|'DECLINE'>('PROCEED_TO_DESIGN');
+  const [externalDispositionSummary,setExternalDispositionSummary] = useState('');
+  const [contactFollowUpTitle,setContactFollowUpTitle] = useState('');
+  const [contactFollowUpOwner,setContactFollowUpOwner] = useState('');
+  const [contactFollowUpDueAt,setContactFollowUpDueAt] = useState('');
   const [discoveryForm,setDiscoveryForm] = useState<PoolDiscovery>(emptyDiscovery);
   const [designInspirations,setDesignInspirations] = useState('');
   const [showEdit,setShowEdit] = useState(false);
+  const [hasIntakeConflict,setHasIntakeConflict] = useState(false);
   const [showRomPreview,setShowRomPreview] = useState(false);
   const [showRomEditor,setShowRomEditor] = useState(false);
   const [romProposalOverrides,setRomProposalOverrides] = useState<RomProposalOverrides>(emptyRomProposalOverrides);
   const [showRecord,setShowRecord] = useState(false);
   const [showMore,setShowMore] = useState(false);
   const [editForm,setEditForm] = useState({ leadName:'', leadEmail:'', leadPhone:'', description:'', objectives:'', preliminaryScope:'', designInspirations:'', budgetExpectation:'', desiredTiming:'', source:'', nextAction:'', nextActionDueAt:'', address:'', city:'', state:'', postalCode:'' });
+  const editFormBaseline = useRef('');
   const [siteMeetingDate,setSiteMeetingDate] = useState('');
   const [siteActivityType,setSiteActivityType] = useState<Consultation['activityType']>('SITE_MEETING');
   const [activitySubject,setActivitySubject] = useState('');
@@ -290,7 +366,7 @@ export default function Inquiries() {
   const [discoveryCallNextActionDueAt,setDiscoveryCallNextActionDueAt] = useState('');
   const [discoveryCallOutcome,setDiscoveryCallOutcome] = useState('');
   const [siteAssessment,setSiteAssessment] = useState('');
-  const [handoffForm,setHandoffForm] = useState({ romAmount:'', romStatus:'', romDecisionAt:'', romApprovedBy:'', designAgreementStatus:'', designAgreementAcceptedAt:'', designAgreementAcceptedBy:'', handoffSummary:'', proposalNarrative:'', proposalProvidedAt:'', proposalClientResponse:'' });
+  const [handoffForm,setHandoffForm] = useState({ romAmount:'', romStatus:'', romDecisionAt:'', romApprovedBy:'', designAgreementStatus:'', designAgreementAcceptedAt:'', designAgreementAcceptedBy:'', designAgreementNotRequiredReason:'', handoffSummary:'', proposalNarrative:'', proposalProvidedAt:'', proposalClientResponse:'' });
   const [form,setForm] = useState<IntakeForm>(emptyForm);
   const [searchParams] = useSearchParams();
   const [search,setSearch] = useState(() => localStorage.getItem('reception.search') || '');
@@ -331,16 +407,26 @@ export default function Inquiries() {
     ATTENTION:countItems.filter((item)=>queueGroup(item)==='ATTENTION').length,
     PROGRESS:countItems.filter((item)=>queueGroup(item)==='PROGRESS').length,
     READY:countItems.filter((item)=>queueGroup(item)==='READY').length,
+    HANDOFF:countItems.filter((item)=>queueGroup(item)==='HANDOFF').length,
     CLOSED:countItems.filter((item)=>queueGroup(item)==='CLOSED').length,
   }),[countItems]);
   const blockers = selected ? handoffBlockers(selected) : [];
+  const handoffReviewCurrent = Boolean(selected?.handoffReview?.result === 'APPROVED'
+    && selected.handoffReview.intakeRevision === selected.intakeRevision
+    && selected.handoffReview.workflowVersion === selected.readiness?.workflowVersion
+    && selected.handoffReview.romPreviewHash === selected.romPreviewHash);
   const openRequests = selected?.workItems?.filter((item)=>!terminalWorkStatuses.includes(item.status)) || [];
   const selectedDiscoveryProgress = discoveryProgress(discoveryForm);
   const selectedPhaseCompletions = selected ? inquiryPhaseDefinitions.map((_, index) => inquiryPhaseCompletion(selected, index)) : [];
   const phaseUnlocked = (phaseIndex:number) => phaseIndex === 0 || selectedPhaseCompletions.slice(0, phaseIndex).every((phase) => phase.complete);
   const phaseOneComplete = Boolean(selectedPhaseCompletions[0]?.complete);
-  const phaseTwoComplete = Boolean(selectedPhaseCompletions[1]?.complete);
-  const phaseThreeComplete = Boolean(selectedPhaseCompletions[2]?.complete);
+  const phaseTwoComplete = selected?.readiness
+    ? Boolean(selected.readiness.phases.find((phase) => phase.id === 'PRE_DESIGN_DISCOVERY')?.blockers.every((criterion) => criterion.id === 'QUALIFICATION_APPROVAL'))
+    : Boolean(selectedPhaseCompletions[1]?.complete);
+  const criteriaForAdminReview = selected?.readiness?.criteria.filter((criterion) =>
+    criterion.answerState === 'NEEDS_REVIEW'
+    || (criterion.answerState === 'UNKNOWN' && ['MUST_HAVE_FEATURES', 'INSPIRATION_STATUS'].includes(criterion.id)),
+  ) || [];
    const scheduledDiscoveryCall = selected?.consultations?.find((consultation) => consultation.status === 'SCHEDULED' && consultation.activityType === 'PHONE_CALL');
    const discoveryCalls = selected?.consultations?.filter((consultation) => consultation.activityType === 'PHONE_CALL') || [];
    const scheduledSiteMeeting = selected?.consultations?.find((consultation) => consultation.status === 'SCHEDULED' && (consultation.activityType === 'SITE_MEETING' || /site\s+meeting/i.test(consultation.title)));
@@ -382,11 +468,17 @@ export default function Inquiries() {
     nextSteps:'',
   };
   const romProposalValue = (key:RomProposalField) => romProposalOverrides[key] ?? romProposalDefaults[key];
+  const editFormDirty = showEdit && JSON.stringify(editForm) !== editFormBaseline.current;
+  const closeEdit = () => {
+    if (editFormDirty && !window.confirm('You have unsaved intake changes. Choose OK to discard them, or Cancel to keep editing.')) return;
+    setShowEdit(false);
+  };
 
   const mutate = async (operation:()=>Promise<unknown>) => {
     try { setSaving(true); setError(''); await operation(); await load(); }
     catch (err) {
       const candidates = (err as any)?.response?.data?.error?.matchCandidates;
+      if ((err as any)?.response?.data?.error?.code === 'STALE_INTAKE_REVISION') setHasIntakeConflict(true);
       if (Array.isArray(candidates)) {
         setMatchCandidates(candidates);
         setClients((current) => [...current, ...candidates.filter((candidate:LeadCandidate) => !current.some((item) => item.id === candidate.id))]);
@@ -394,6 +486,10 @@ export default function Inquiries() {
       setError(getApiErrorMessage(err,'The intake record could not be updated.'));
     }
     finally { setSaving(false); }
+  };
+  const saveCriterionReview = (criterionId: string, answerState: 'CONFIRMED' | 'UNKNOWN' | 'NOT_APPLICABLE', reason?: string, answerValue?: string) => {
+    if (!selected) return;
+    void mutate(() => inquiryApi.setCriterionState(selected.id, criterionId, { answerState, reason, answerValue }, selected.intakeRevision));
   };
   const create = (event:FormEvent) => {
     event.preventDefault();
@@ -408,6 +504,8 @@ export default function Inquiries() {
   };
   const select = async (item:Inquiry) => {
     try {
+      setHasIntakeConflict(false);
+      setError('');
       const detail = (await inquiryApi.get(item.id)).data as Inquiry;
       setComplianceResearch(null);
       void inquiryApi.getComplianceResearch(item.id).then((response) => setComplianceResearch(response.data as ComplianceResearchSnapshot)).catch(() => {});
@@ -433,8 +531,9 @@ export default function Inquiries() {
        setDiscoveryCallOutcome('');
       setOutcome(''); setOutcomeDecision(''); setOutcomeReadiness(''); setOutcomeCondition(''); setOutcomeNextStep(''); setOutcomeSpecific(''); setOutcomeSpecifics([]);
       setSiteAssessment(detail.siteAssessment || '');
-      setHandoffForm({romAmount:detail.romAmount||'',romStatus:detail.romStatus||'',romDecisionAt:detail.romDecisionAt?detail.romDecisionAt.slice(0,16):'',romApprovedBy:detail.romApprovedBy||'',designAgreementStatus:detail.designAgreementStatus||'',designAgreementAcceptedAt:detail.designAgreementAcceptedAt?detail.designAgreementAcceptedAt.slice(0,16):'',designAgreementAcceptedBy:detail.designAgreementAcceptedBy||'',handoffSummary:detail.handoffSummary||'',proposalNarrative:detail.proposalNarrative||'',proposalProvidedAt:detail.proposalProvidedAt?detail.proposalProvidedAt.slice(0,16):'',proposalClientResponse:detail.proposalClientResponse||''});
-      setEditForm({leadName:detail.client.name||'',leadEmail:detail.client.email||'',leadPhone:detail.client.phone||'',description:detail.description||'',objectives:detail.objectives||'',preliminaryScope:detail.preliminaryScope||'',designInspirations:detail.designInspirations||'',budgetExpectation:detail.budgetExpectation||'',desiredTiming:detail.desiredTiming||'',source:detail.source||'',nextAction:detail.nextAction||'',nextActionDueAt:detail.nextActionDueAt?detail.nextActionDueAt.slice(0,16):'',address:detail.property?.address||'',city:detail.property?.city||'',state:detail.property?.state||'AZ',postalCode:detail.property?.postalCode||''});
+      setHandoffForm({romAmount:detail.romAmount||'',romStatus:detail.romStatus||'',romDecisionAt:detail.romDecisionAt?detail.romDecisionAt.slice(0,16):'',romApprovedBy:detail.romApprovedBy||'',designAgreementStatus:detail.designAgreementStatus||'',designAgreementAcceptedAt:detail.designAgreementAcceptedAt?detail.designAgreementAcceptedAt.slice(0,16):'',designAgreementAcceptedBy:detail.designAgreementAcceptedBy||'',designAgreementNotRequiredReason:detail.readiness?.criteria.find((item)=>item.id==='DESIGN_AGREEMENT')?.reason||'',handoffSummary:detail.handoffSummary||'',proposalNarrative:detail.proposalNarrative||'',proposalProvidedAt:detail.proposalProvidedAt?detail.proposalProvidedAt.slice(0,16):'',proposalClientResponse:detail.proposalClientResponse||''});
+      const nextEditForm = {leadName:detail.client.name||'',leadEmail:detail.client.email||'',leadPhone:detail.client.phone||'',description:detail.description||'',objectives:detail.objectives||'',preliminaryScope:detail.preliminaryScope||'',designInspirations:detail.designInspirations||'',budgetExpectation:detail.budgetExpectation||'',desiredTiming:detail.desiredTiming||'',source:detail.source||'',nextAction:detail.nextAction||'',nextActionDueAt:detail.nextActionDueAt?detail.nextActionDueAt.slice(0,16):'',address:detail.property?.address||'',city:detail.property?.city||'',state:detail.property?.state||'AZ',postalCode:detail.property?.postalCode||''};
+      setEditForm(nextEditForm); editFormBaseline.current = JSON.stringify(nextEditForm);
     } catch (err) { setError(getApiErrorMessage(err,'Intake details could not be loaded.')); }
   };
   useEffect(() => {
@@ -449,7 +548,7 @@ export default function Inquiries() {
     const timer = window.setTimeout(async () => {
       setDiscoverySaveState('saving');
       try {
-        const response = await inquiryApi.update(selected.id, { discovery: discoveryForm, designInspirations: designInspirations.trim() || null });
+        const response = await inquiryApi.update(selected.id, { discovery: discoveryForm, designInspirations: designInspirations.trim() || null }, selected.intakeRevision);
         lastSavedDiscovery.current = snapshot;
         setSelected(response.data);
         setDiscoverySaveState('saved');
@@ -482,16 +581,22 @@ export default function Inquiries() {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [discoveryDirty]);
+  useEffect(() => {
+    if (!editFormDirty) return;
+    const warn = (event:BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [editFormDirty]);
   const changeStatus = (status:string) => {
     if (!selected) return;
     if (['DECLINED','NURTURED'].includes(status)) { setStatusAction(status as 'NURTURED'|'DECLINED'); setStatusReason(''); return; }
-    mutate(()=>inquiryApi.setStatus(selected.id,status));
+    mutate(()=>inquiryApi.setStatus(selected.id,status,selected.intakeRevision));
   };
   const saveDiscovery = (event:FormEvent) => {
     event.preventDefault();
     if (!selected) return;
     const snapshot = JSON.stringify({discovery:discoveryForm,designInspirations});
-    mutate(async()=>{ await inquiryApi.update(selected.id,{discovery:discoveryForm,designInspirations:designInspirations.trim()||null}); lastSavedDiscovery.current = snapshot; setDiscoverySaveState('saved'); });
+    mutate(async()=>{ await inquiryApi.update(selected.id,{discovery:discoveryForm,designInspirations:designInspirations.trim()||null},selected.intakeRevision); lastSavedDiscovery.current = snapshot; setDiscoverySaveState('saved'); });
   };
   const verifyComplianceCategories = () => {
     if (!selected?.property?.address) {
@@ -505,7 +610,7 @@ export default function Inquiries() {
       ...(complianceResearch?.savedLinks?.map((link) => link.url) || []),
     ])].join('\n');
     mutate(async()=>{
-      const response = await inquiryApi.verifyCompliance(selected.id,{status:'VERIFIED',source:complianceResearch?.job?.sources.length?'Automated public-web sources reviewed by representative':'Representative address review',categories:reviewedCategories,links:reviewedLinks||null,notes:'Compliance categories, research findings, and supporting source links reviewed by the assigned representative.'});
+      const response = await inquiryApi.verifyCompliance(selected.id,{status:'VERIFIED',source:complianceResearch?.job?.sources.length?'Automated public-web sources reviewed by representative':'Representative address review',categories:reviewedCategories,links:reviewedLinks||null,notes:'Compliance categories, research findings, and supporting source links reviewed by the assigned representative.'},selected.intakeRevision);
       const verified = response.data as Inquiry;
       setDiscoveryForm((current)=>({...current,complianceCategories:reviewedCategories,complianceLinks:reviewedLinks,complianceVerificationStatus:verified.complianceVerificationStatus||'VERIFIED',complianceVerificationCheckedAt:verified.complianceVerificationCheckedAt||new Date().toISOString(),complianceFollowUpStatus:'VERIFIED'}));
     });
@@ -520,12 +625,53 @@ export default function Inquiries() {
         summary: summarizeComplianceExcerpt(source.excerpt),
         authorityType: source.authorityType,
         authorityName: source.authorityName,
-      });
+      },selected.intakeRevision);
       const saved = response.data as ComplianceResearchSnapshot['savedLinks'][number];
       setComplianceResearch((current) => current ? {
         ...current,
         savedLinks: [saved, ...current.savedLinks.filter((link) => link.url !== saved.url)],
       } : current);
+    });
+  };
+  const createContactLog = (event:FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selected) return;
+    const followUpTitle = contactFollowUpTitle.trim();
+    const followUpFieldsStarted = Boolean(followUpTitle || contactFollowUpOwner || contactFollowUpDueAt);
+    if (followUpFieldsStarted && (!followUpTitle || !contactFollowUpOwner || !contactFollowUpDueAt)) {
+      setError('A follow-up needs an action, owner, and due date.');
+      return;
+    }
+    const occurredAt = new Date().toISOString();
+    mutate(async()=>{
+      await inquiryApi.logActivity(selected.id,{
+        channel:contactChannel,direction:contactDirection,contactPerson:contactPerson.trim()||null,
+        occurredAt,organizationTimezone:'America/Phoenix',summary:contactSummary.trim(),outcomeCode:contactOutcome,
+        ...(followUpFieldsStarted?{followUp:{title:followUpTitle,ownerId:contactFollowUpOwner,dueAt:new Date(contactFollowUpDueAt).toISOString()}}:{}),
+        expectedIntakeRevision:selected.intakeRevision,idempotencyKey:crypto.randomUUID(),
+      });
+      setContactSummary('');setContactPerson('');setContactFollowUpTitle('');setContactFollowUpOwner('');setContactFollowUpDueAt('');setContactOutcome('CONNECTED');
+    });
+  };
+  const categorizeDocumentAsEvidence = (documentId:string,category:string) => {
+    if (!selected) return;
+    mutate(()=>inquiryApi.addEvidence(selected.id,{documentId,category,expectedIntakeRevision:selected.intakeRevision}));
+  };
+  const reviewClientDisposition = (activityId:string,payload:Record<string,unknown>) => {
+    if (!selected) return;
+    mutate(()=>inquiryApi.reviewDisposition(selected.id,{...payload,activityId,expectedIntakeRevision:selected.intakeRevision,attested:true}));
+  };
+  const recordExternalDisposition = (event:FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selected) return;
+    mutate(async()=>{
+      await inquiryApi.logActivity(selected.id,{
+        channel:externalDispositionChannel,direction:'INBOUND',occurredAt:new Date().toISOString(),
+        organizationTimezone:'America/Phoenix',summary:externalDispositionSummary.trim(),
+        outcomeCode:'CLIENT_DISPOSITION_RECEIVED',clientDispositionValue:externalDisposition,
+        expectedIntakeRevision:selected.intakeRevision,idempotencyKey:crypto.randomUUID(),
+      });
+      setExternalDispositionSummary('');
     });
   };
   const startComplianceResearch = async () => {
@@ -536,7 +682,7 @@ export default function Inquiries() {
     }
     try {
       setSaving(true); setError('');
-      const response = await inquiryApi.startComplianceResearch(selected.id);
+      const response = await inquiryApi.startComplianceResearch(selected.id,selected.intakeRevision);
       setComplianceResearch(response.data as ComplianceResearchSnapshot);
       await load();
     } catch (err) {
@@ -545,26 +691,26 @@ export default function Inquiries() {
   };
    const scheduleSiteMeeting = () => {
      if (!selected || !siteMeetingDate) return;
-     mutate(async()=>{ await consultationApi.create(selected.clientId,{ title:'Site meeting', activityType:'SITE_MEETING', subject:activitySubject.trim()||null, date:new Date(siteMeetingDate).toISOString(), endAt:activityEndAt?new Date(activityEndAt).toISOString():null, status:'SCHEDULED', inquiryId:selected.id, participants:activityParticipants.trim()||null, nextAction:activityNextAction||null, nextActionDueAt:activityNextActionDueAt?new Date(activityNextActionDueAt).toISOString():null }); });
+     mutate(async()=>{ await consultationApi.create(selected.clientId,{ title:'Site meeting', activityType:'SITE_MEETING', meetingMode:'ONSITE', subject:activitySubject.trim()||null, date:new Date(siteMeetingDate).toISOString(), endAt:activityEndAt?new Date(activityEndAt).toISOString():null, status:'SCHEDULED', inquiryId:selected.id, expectedIntakeRevision:selected.intakeRevision, participants:activityParticipants.trim()||null, nextAction:activityNextAction||null, nextActionDueAt:activityNextActionDueAt?new Date(activityNextActionDueAt).toISOString():null }); });
    };
    const scheduleDiscoveryCall = () => {
      if (!selected || !discoveryCallDate) return;
-     mutate(async()=>{ await consultationApi.create(selected.clientId,{ title:'Pre-design discovery call', activityType:'PHONE_CALL', subject:discoveryCallSubject.trim()||null, date:new Date(discoveryCallDate).toISOString(), endAt:discoveryCallEndAt?new Date(discoveryCallEndAt).toISOString():null, status:'SCHEDULED', inquiryId:selected.id, participants:discoveryCallParticipants.trim()||null, nextAction:discoveryCallNextAction||null, nextActionDueAt:discoveryCallNextActionDueAt?new Date(discoveryCallNextActionDueAt).toISOString():null }); });
+     mutate(async()=>{ await consultationApi.create(selected.clientId,{ title:'Pre-design discovery call', activityType:'PHONE_CALL', meetingMode:'PHONE', subject:discoveryCallSubject.trim()||null, date:new Date(discoveryCallDate).toISOString(), endAt:discoveryCallEndAt?new Date(discoveryCallEndAt).toISOString():null, status:'SCHEDULED', inquiryId:selected.id, expectedIntakeRevision:selected.intakeRevision, participants:discoveryCallParticipants.trim()||null, nextAction:discoveryCallNextAction||null, nextActionDueAt:discoveryCallNextActionDueAt?new Date(discoveryCallNextActionDueAt).toISOString():null }); });
    };
    const cancelDiscoveryCall = () => {
      if (!selected || !scheduledDiscoveryCall || !activityCancellationReason.trim()) return;
-     mutate(()=>consultationApi.update(selected.clientId,scheduledDiscoveryCall.id,{status:'CANCELLED',cancellationReason:activityCancellationReason.trim()}));
+     mutate(()=>consultationApi.update(selected.clientId,scheduledDiscoveryCall.id,{status:'CANCELLED',cancellationReason:activityCancellationReason.trim(),expectedIntakeRevision:selected.intakeRevision}));
    };
    const recordDiscoveryCall = () => {
      if (!selected || !scheduledDiscoveryCall || !discoveryCallOutcome.trim()) return;
      mutate(async()=>{
-       await consultationApi.update(selected.clientId,scheduledDiscoveryCall.id,{status:'COMPLETED',subject:discoveryCallSubject.trim()||null,participants:discoveryCallParticipants.trim()||null,endAt:discoveryCallEndAt?new Date(discoveryCallEndAt).toISOString():null,nextAction:discoveryCallNextAction||null,nextActionDueAt:discoveryCallNextActionDueAt?new Date(discoveryCallNextActionDueAt).toISOString():null,outcome:discoveryCallOutcome.trim()});
+       await consultationApi.update(selected.clientId,scheduledDiscoveryCall.id,{status:'COMPLETED',meetingMode:'PHONE',subject:discoveryCallSubject.trim()||null,participants:discoveryCallParticipants.trim()||null,endAt:discoveryCallEndAt?new Date(discoveryCallEndAt).toISOString():null,nextAction:discoveryCallNextAction||null,nextActionDueAt:discoveryCallNextActionDueAt?new Date(discoveryCallNextActionDueAt).toISOString():null,outcome:discoveryCallOutcome.trim(),expectedIntakeRevision:selected.intakeRevision});
        setDiscoveryCallOutcome(''); setDiscoveryCallSubject(''); setDiscoveryCallParticipants(''); setDiscoveryCallEndAt(''); setDiscoveryCallNextAction(''); setDiscoveryCallNextActionDueAt('');
      });
    };
    const cancelScheduledActivity = () => {
     if (!selected || !scheduledSiteMeeting || !activityCancellationReason.trim()) return;
-    mutate(()=>consultationApi.update(selected.clientId,scheduledSiteMeeting.id,{status:'CANCELLED',cancellationReason:activityCancellationReason.trim()}));
+    mutate(()=>consultationApi.update(selected.clientId,scheduledSiteMeeting.id,{status:'CANCELLED',cancellationReason:activityCancellationReason.trim(),expectedIntakeRevision:selected.intakeRevision}));
   };
   const addOutcomeSpecific = () => {
     const specific = outcomeSpecific.trim();
@@ -578,7 +724,7 @@ export default function Inquiries() {
     if (activityType !== 'SITE_MEETING') {
       if (!outcome.trim()) return;
       mutate(async()=>{
-        await consultationApi.update(selected.clientId,scheduledSiteMeeting.id,{status:'COMPLETED',subject:activitySubject.trim()||null,participants:activityParticipants.trim()||null,endAt:activityEndAt?new Date(activityEndAt).toISOString():null,nextAction:activityNextAction||null,nextActionDueAt:activityNextActionDueAt?new Date(activityNextActionDueAt).toISOString():null,outcome:outcome.trim()});
+        await consultationApi.update(selected.clientId,scheduledSiteMeeting.id,{status:'COMPLETED',meetingMode:activityType==='PHONE_CALL'?'PHONE':activityType==='VIDEO_CALL'?'VIDEO':'ONSITE',subject:activitySubject.trim()||null,participants:activityParticipants.trim()||null,endAt:activityEndAt?new Date(activityEndAt).toISOString():null,nextAction:activityNextAction||null,nextActionDueAt:activityNextActionDueAt?new Date(activityNextActionDueAt).toISOString():null,outcome:outcome.trim(),expectedIntakeRevision:selected.intakeRevision});
         setOutcome(''); setActivitySubject(''); setActivityParticipants(''); setActivityEndAt(''); setActivityNextAction(''); setActivityNextActionDueAt('');
       });
       return;
@@ -593,33 +739,49 @@ export default function Inquiries() {
       outcome.trim() ? `Additional notes: ${outcome.trim()}` : '',
     ].filter(Boolean).join('\n');
     mutate(async()=>{
-      await consultationApi.update(selected.clientId,scheduledSiteMeeting.id,{status:'COMPLETED',subject:activitySubject.trim()||null,participants:activityParticipants.trim()||null,endAt:activityEndAt?new Date(activityEndAt).toISOString():null,nextAction:activityNextAction||null,nextActionDueAt:activityNextActionDueAt?new Date(activityNextActionDueAt).toISOString():null,outcome:details});
+      await consultationApi.update(selected.clientId,scheduledSiteMeeting.id,{status:'COMPLETED',meetingMode:'ONSITE',subject:activitySubject.trim()||null,participants:activityParticipants.trim()||null,endAt:activityEndAt?new Date(activityEndAt).toISOString():null,nextAction:activityNextAction||null,nextActionDueAt:activityNextActionDueAt?new Date(activityNextActionDueAt).toISOString():null,outcome:details,expectedIntakeRevision:selected.intakeRevision});
       setOutcome(''); setOutcomeDecision(''); setOutcomeReadiness(''); setOutcomeCondition(''); setOutcomeNextStep(''); setOutcomeSpecific(''); setOutcomeSpecifics([]);
     });
   };
   const saveSiteAssessment = () => {
     if (!selected) return;
-    mutate(()=>inquiryApi.update(selected.id,{siteAssessment:siteAssessment.trim()||null}));
+    mutate(()=>inquiryApi.update(selected.id,{siteAssessment:siteAssessment.trim()||null},selected.intakeRevision));
   };
   const saveHandoffDetails = () => {
     if (!selected) return;
+    if (handoffForm.designAgreementStatus==='NOT_REQUIRED'&&!handoffForm.designAgreementNotRequiredReason.trim()) {
+      setError('An Admin reason is required to mark the Design Agreement not required.');
+      return;
+    }
     const romApproved = handoffForm.romStatus === 'APPROVED';
     const agreementAccepted = handoffForm.designAgreementStatus === 'ACCEPTED';
-    mutate(()=>inquiryApi.update(selected.id,{romAmount:handoffForm.romAmount.trim()||null,romStatus:handoffForm.romStatus||null,romDecisionAt:romApproved&&handoffForm.romDecisionAt?new Date(handoffForm.romDecisionAt).toISOString():null,romApprovedBy:romApproved?(handoffForm.romApprovedBy||currentUser?.id||null):null,designAgreementStatus:handoffForm.designAgreementStatus||null,designAgreementAcceptedAt:agreementAccepted&&handoffForm.designAgreementAcceptedAt?new Date(handoffForm.designAgreementAcceptedAt).toISOString():null,designAgreementAcceptedBy:agreementAccepted?(handoffForm.designAgreementAcceptedBy||currentUser?.id||null):null,handoffSummary:handoffForm.handoffSummary.trim()||null,proposalNarrative:handoffForm.proposalNarrative.trim()||null,romProposalDetails:JSON.stringify(romProposalOverrides),proposalProvidedAt:handoffForm.proposalProvidedAt?new Date(handoffForm.proposalProvidedAt).toISOString():null,proposalClientResponse:handoffForm.proposalClientResponse.trim()||null}));
+    mutate(async()=>{
+      await inquiryApi.update(selected.id,{romAmount:handoffForm.romAmount.trim()||null,romStatus:handoffForm.romStatus||null,romDecisionAt:romApproved&&handoffForm.romDecisionAt?new Date(handoffForm.romDecisionAt).toISOString():null,romApprovedBy:romApproved?(handoffForm.romApprovedBy||currentUser?.id||null):null,designAgreementStatus:handoffForm.designAgreementStatus||null,designAgreementAcceptedAt:agreementAccepted&&handoffForm.designAgreementAcceptedAt?new Date(handoffForm.designAgreementAcceptedAt).toISOString():null,designAgreementAcceptedBy:agreementAccepted?(handoffForm.designAgreementAcceptedBy||currentUser?.id||null):null,handoffSummary:handoffForm.handoffSummary.trim()||null,proposalNarrative:handoffForm.proposalNarrative.trim()||null,romProposalDetails:JSON.stringify(romProposalOverrides),proposalProvidedAt:handoffForm.proposalProvidedAt?new Date(handoffForm.proposalProvidedAt).toISOString():null,proposalClientResponse:handoffForm.proposalClientResponse.trim()||null},selected.intakeRevision);
+      let previewRevision=selected.intakeRevision+1;
+      if (handoffForm.designAgreementStatus==='NOT_REQUIRED') {
+        await inquiryApi.setCriterionState(selected.id,'DESIGN_AGREEMENT',{answerState:'CONFIRMED',reason:handoffForm.designAgreementNotRequiredReason.trim()},previewRevision);
+        previewRevision++;
+      }
+      await inquiryApi.saveRomPreview(selected.id,previewRevision);
+    });
   };
   const saveRomProposal = (event:FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selected) return;
     mutate(async()=>{
-      await inquiryApi.update(selected.id,{romProposalDetails:JSON.stringify(romProposalOverrides)});
+      await inquiryApi.update(selected.id,{romProposalDetails:JSON.stringify(romProposalOverrides)},selected.intakeRevision);
+      await inquiryApi.saveRomPreview(selected.id,selected.intakeRevision+1);
       setShowRomEditor(false);
     });
+  };
+  const runHandoffReview = () => {
+    if (!selected) return;
+    mutate(()=>inquiryApi.reviewHandoff(selected.id,{expectedIntakeRevision:selected.intakeRevision,workflowVersion:selected.readiness?.workflowVersion||1}));
   };
   const completeHandoff = () => {
     if (!selected) return;
     mutate(async()=>{
-      await inquiryApi.update(selected.id,{romAmount:handoffForm.romAmount.trim()||null,romStatus:handoffForm.romStatus||null,romDecisionAt:handoffForm.romStatus==='APPROVED'&&handoffForm.romDecisionAt?new Date(handoffForm.romDecisionAt).toISOString():null,romApprovedBy:handoffForm.romStatus==='APPROVED'?(handoffForm.romApprovedBy||currentUser?.id||null):null,designAgreementStatus:handoffForm.designAgreementStatus||null,designAgreementAcceptedAt:handoffForm.designAgreementStatus==='ACCEPTED'&&handoffForm.designAgreementAcceptedAt?new Date(handoffForm.designAgreementAcceptedAt).toISOString():null,designAgreementAcceptedBy:handoffForm.designAgreementStatus==='ACCEPTED'?(handoffForm.designAgreementAcceptedBy||currentUser?.id||null):null,handoffSummary:handoffForm.handoffSummary.trim()||null,handoffApprovedBy:currentUser?.id||null,proposalNarrative:handoffForm.proposalNarrative.trim()||null,romProposalDetails:JSON.stringify(romProposalOverrides),proposalProvidedAt:handoffForm.proposalProvidedAt?new Date(handoffForm.proposalProvidedAt).toISOString():null,proposalClientResponse:handoffForm.proposalClientResponse.trim()||null});
-      const response = await inquiryApi.convert(selected.id);
+      const response = await inquiryApi.convert(selected.id,selected.intakeRevision);
       const data = response.data;
       const projectId = data.project?.id || data.id;
       setHandoffSuccess({clientId:data.client?.id || selected.clientId,projectId});
@@ -642,13 +804,13 @@ export default function Inquiries() {
     ...definition,
     step: index + 1,
     count: counts[definition.key as keyof typeof counts],
-    tone: ['text-blue-700', 'text-amber-700', 'text-emerald-700', 'text-gray-700'][index],
+    tone: ['text-blue-700', 'text-amber-700', 'text-emerald-700', 'text-violet-700'][index],
   }));
   const selectedWorkflow = queueCards.find((card) => card.key === queue);
 
   return <div className="mx-auto max-w-7xl space-y-6">
     <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-semibold text-blue-700">Reception workspace</p><h1 className="text-2xl font-bold text-gray-950">Reception Intake</h1><p className="mt-1 max-w-2xl text-sm text-gray-600">Build one clear project record that Design can continue without repeating the first conversation.</p></div><button onClick={()=>setShowCreate(!showCreate)} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="mr-2 inline h-4 w-4" />New project inquiry</button></header>
-    {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
+    {error && !showEdit && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
     {handoffSuccess && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><CheckCircle2 className="mr-2 inline h-4 w-4" /><span className="font-semibold">Lead converted to active client and Design project created.</span><span className="ml-2 inline-flex gap-3"><Link className="font-semibold underline" to={`/clients/${handoffSuccess.clientId}`}>Open Client</Link><Link className="font-semibold underline" to={`/projects/${handoffSuccess.projectId}`}>Open Design project</Link></span></div>}
 <section aria-label="Pool construction intake workflow" className="rounded-xl border border-gray-200 bg-white p-4"><div className="flex flex-col gap-1"><p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Pool construction workflow</p><p className="text-sm text-gray-600">Select a phase to view the inquiries currently matching it.</p></div><div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-stretch">{queueCards.map((card,index)=><div key={card.key} className="flex min-w-0 flex-1 basis-0 items-stretch gap-3"><button onClick={()=>{setFilter('');setQueue(card.key);}} aria-label={`${card.label}: ${card.count} inquiries`} className={`flex h-full min-w-0 flex-1 flex-col rounded-xl border p-4 text-left transition hover:border-blue-400 hover:shadow-sm ${queue===card.key&&!filter?'border-blue-500 bg-blue-50 ring-2 ring-blue-100':'border-gray-200 bg-white'}`}><div className="flex min-h-[4rem] items-start justify-between gap-2"><p className="text-sm font-semibold leading-5 text-gray-900">{card.label}</p><span className={`shrink-0 text-2xl font-bold ${card.tone}`}>{card.count}</span></div><p className="mt-auto pt-4 text-xs font-semibold text-blue-700">View this phase</p></button>{index<queueCards.length-1&&<ArrowRight className="hidden w-5 shrink-0 self-center text-gray-300 xl:block" aria-hidden="true"/>}</div>)}</div></section>
 
@@ -668,13 +830,14 @@ export default function Inquiries() {
 
       {selected&&<FormModal open={showRecord} title={selected.client.name} description={selected.property?`${selected.property.address}, ${selected.property.city||''} ${selected.property.state||''}`:'Property information needed'} showSubmit={false} cancelLabel="Close" maxWidthClass="max-w-5xl" onClose={()=>setShowRecord(false)}>
         <InquiryPhaseProgress completions={selectedPhaseCompletions} activePhaseIndex={selectedPhaseCompletions.findIndex((phase) => !phase.complete) < 0 ? inquiryPhaseDefinitions.length - 1 : Math.max(0, selectedPhaseCompletions.findIndex((phase) => !phase.complete))} onOpen={(tab)=>{setActiveTab(tab);if(tab==='QUESTIONS')setDiscoverySubTab('QUESTIONS');}} />
+        {currentUser?.role==='ADMIN'&&['NEW','IN_REVIEW','QUALIFIED'].includes(selected.qualificationStatus)&&criteriaForAdminReview.length>0&&<LegacyCriterionReviewPanel inquiry={selected} criteria={criteriaForAdminReview} saving={saving} onSave={saveCriterionReview}/>}
         <nav aria-label="Intake record sections" className="flex items-center overflow-x-auto border-b border-gray-200 px-3"><TabButton disabled={!phaseUnlocked(0)} active={activeTab==='INTAKE'} onClick={()=>setActiveTab('INTAKE')} icon={<UserRound className="h-4 w-4"/>} label="Intake"/><TabButton disabled={!phaseUnlocked(1)} active={activeTab==='QUESTIONS'} onClick={()=>{setDiscoverySubTab('QUESTIONS');setActiveTab('QUESTIONS');}} icon={<ClipboardList className="h-4 w-4"/>} label={`Pre-design discovery${selectedDiscoveryProgress.percent===100?' ✓':''}${discoverySaveState==='saved'?' · Saved':''}`}/><TabButton disabled={!phaseUnlocked(2)} active={activeTab==='SCHEDULE'} onClick={()=>setActiveTab('SCHEDULE')} icon={<Clock3 className="h-4 w-4"/>} label="Site Meetings"/><TabButton active={activeTab==='FILES'} onClick={()=>setActiveTab('FILES')} icon={<FileText className="h-4 w-4"/>} label="Files"/><TabButton disabled={!phaseUnlocked(3)} active={activeTab==='HANDOFF'} onClick={()=>setActiveTab('HANDOFF')} icon={<ClipboardCheck className="h-4 w-4"/>} label="Handoff"/><button type="button" onClick={downloadInquiryPdf} disabled={exportingInquiry} className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"><Download className="h-4 w-4"/>{exportingInquiry?'Preparing report…':'Download inquiry report'}</button></nav>
         <div className="inquiry-form-shell p-5">
           {activeTab==='HANDOFF'&&<div className="mb-4 flex flex-wrap justify-end gap-2"><button type="button" onClick={()=>setShowRomEditor(true)} className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"><FileText className="h-4 w-4"/>Edit ROM proposal</button><button type="button" onClick={()=>setShowRomPreview(true)} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"><FileText className="h-4 w-4"/>Preview ROM proposal</button></div>}
            {activeTab==='INTAKE'&&<div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Project information</h3><p className="mt-1 text-sm text-gray-600">Capture facts once and build on this record through Design.</p></div><button onClick={()=>{setShowRecord(false);setShowEdit(true);}} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:border-blue-500 hover:text-blue-700">Edit intake</button></div>
             <div className="grid gap-4 sm:grid-cols-2"><Detail label="Client email" value={selected.client.email}/><Detail label="Project description" value={selected.description}/><Detail label="Objectives" value={selected.objectives}/><Detail label="Preliminary scope" value={selected.preliminaryScope}/><Detail label="Budget expectation" value={selected.budgetExpectation} preliminary/><Detail label="Desired timing" value={selected.desiredTiming} preliminary/><Detail label="Source / referral" value={selected.source}/><Detail label="Reception owner" value={selected.owner?.name}/></div>
-            {!selected.ownerId&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="mb-3 text-sm font-semibold text-amber-950">This inquiry needs an owner and next action.</p><Select label="Assign reception owner" value="" set={(ownerId)=>ownerId&&mutate(()=>inquiryApi.update(selected.id,{ownerId,nextAction:selected.nextAction||'Complete qualification review',nextActionDueAt:new Date(Date.now()+86400000).toISOString()}))} options={users.map((user)=>({value:user.id,label:user.name}))}/></div>}
+            {!selected.ownerId&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="mb-3 text-sm font-semibold text-amber-950">This inquiry needs an owner and next action.</p><Select label="Assign reception owner" value="" set={(ownerId)=>ownerId&&mutate(()=>inquiryApi.update(selected.id,{ownerId,nextAction:selected.nextAction||'Complete qualification review',nextActionDueAt:new Date(Date.now()+86400000).toISOString()},selected.intakeRevision))} options={users.map((user)=>({value:user.id,label:user.name}))}/></div>}
           </div>}
 
            {activeTab==='QUESTIONS'&&<form noValidate onSubmit={saveDiscovery} className="space-y-6">
@@ -755,7 +918,7 @@ export default function Inquiries() {
 
              {(discoverySubTab==='QUESTIONS'||discoverySubTab==='COMMUNITY')&&<div className="sticky bottom-0 -mx-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-4"><p className="text-sm text-gray-600">Fields marked * are required before qualification.</p><button disabled={saving} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{saving?'Saving…':'Save discovery'}</button></div>}
 
-            {discoverySubTab==='QUESTIONS'&&<details className="rounded-xl border border-gray-200 bg-gray-50"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-800">Client follow-up requests {openRequests.length?`(${openRequests.length} open)`: '(use only when necessary)'}</summary><div className="space-y-4 border-t border-gray-200 p-4">{selected.workItems?.length?<div className="space-y-3">{selected.workItems.map((item)=><div key={item.id} className={`rounded-lg border p-4 ${terminalWorkStatuses.includes(item.status)?'border-gray-200 bg-white':'border-amber-200 bg-amber-50'}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-gray-950">{item.title}</p>{item.description&&<p className="mt-1 text-sm text-gray-600">{item.description}</p>}<p className="mt-2 text-xs text-gray-500">{item.dueAt?`Due ${new Date(item.dueAt).toLocaleDateString()}`:'No due date'}</p></div><span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-700">{item.status.replace(/_/g,' ')}</span></div></div>)}</div>:<p className="text-sm text-gray-500">No client follow-up requests have been created.</p>}<label className="text-sm font-semibold text-gray-900">Request an item that the representative cannot answer<input aria-label="Missing information request" value={informationRequest} onChange={(event)=>setInformationRequest(event.target.value)} placeholder="Example: Upload the current property survey" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal"/></label><div className="flex justify-end"><button type="button" disabled={saving||!informationRequest.trim()} onClick={()=>informationRequest&&mutate(async()=>{await inquiryApi.requestInformation(selected.id,{title:informationRequest,dueAt:new Date(Date.now()+3*86400000).toISOString()});setInformationRequest('');})} className="rounded-lg bg-amber-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Send focused request</button></div></div></details>}
+            {discoverySubTab==='QUESTIONS'&&<details className="rounded-xl border border-gray-200 bg-gray-50"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-800">Client follow-up requests {openRequests.length?`(${openRequests.length} open)`: '(use only when necessary)'}</summary><div className="space-y-4 border-t border-gray-200 p-4">{selected.workItems?.length?<div className="space-y-3">{selected.workItems.map((item)=><div key={item.id} className={`rounded-lg border p-4 ${terminalWorkStatuses.includes(item.status)?'border-gray-200 bg-white':'border-amber-200 bg-amber-50'}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-gray-950">{item.title}</p>{item.description&&<p className="mt-1 text-sm text-gray-600">{item.description}</p>}<p className="mt-2 text-xs text-gray-500">{item.dueAt?`Due ${new Date(item.dueAt).toLocaleDateString()}`:'No due date'}</p></div><span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-700">{item.status.replace(/_/g,' ')}</span></div></div>)}</div>:<p className="text-sm text-gray-500">No client follow-up requests have been created.</p>}<label className="text-sm font-semibold text-gray-900">Request an item that the representative cannot answer<input aria-label="Missing information request" value={informationRequest} onChange={(event)=>setInformationRequest(event.target.value)} placeholder="Example: Upload the current property survey" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal"/></label><div className="flex justify-end"><button type="button" disabled={saving||!informationRequest.trim()} onClick={()=>informationRequest&&mutate(async()=>{await inquiryApi.requestInformation(selected.id,{title:informationRequest,dueAt:new Date(Date.now()+3*86400000).toISOString()},selected.intakeRevision);setInformationRequest('');})} className="rounded-lg bg-amber-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Send focused request</button></div></div></details>}
           </form>}
 
            {activeTab==='SCHEDULE'&&<div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><p className="font-semibold text-blue-950">Site meetings happen after discovery</p><p className="mt-1 text-sm text-blue-800">This phase is only for in-person site meetings after the potential client has completed the pre-design conversation. Phone calls are scheduled and recorded in Pre-design discovery.</p></div>}
@@ -763,10 +926,43 @@ export default function Inquiries() {
 
 {activeTab==='SCHEDULE'&&<div className="space-y-5"><div><h3 className="font-semibold">Site Meetings</h3><p className="mt-1 text-sm text-gray-600">Track each in-person site meeting separately and record the evidence needed before ROM handoff. Pre-design phone calls stay in the discovery phase.</p></div><div className="rounded-xl border border-gray-200 bg-gray-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="font-semibold text-gray-950">Site meeting tracker</h4><p className="mt-1 text-sm text-gray-600">Schedule the next site meeting only after the potential client has completed the pre-design conversation. Multiple site meetings may be recorded before handoff.</p></div>{completedSiteMeeting?<span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Site meeting completed</span>:scheduledSiteMeeting?<span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Site meeting scheduled</span>:<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">Needs scheduling</span>}</div>{scheduledSiteMeeting&&!completedSiteMeeting&&<p className="mt-3 text-sm text-gray-700">{scheduledSiteMeeting.title} scheduled for {new Date(scheduledSiteMeeting.date).toLocaleString()}</p>}{!scheduledSiteMeeting&&<div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="flex-1 text-sm font-semibold text-gray-800">Site meeting date and time<input type="datetime-local" required value={siteMeetingDate} onChange={(event)=>setSiteMeetingDate(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal"/></label><button type="button" disabled={saving||!siteMeetingDate} onClick={scheduleSiteMeeting} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Schedule site meeting</button></div>}{scheduledSiteMeeting&&!completedSiteMeeting&&<div className="mt-4 border-t border-gray-200 pt-4"><div><h4 className="font-semibold text-gray-900">{currentActivityType==='SITE_MEETING'?'Site meeting outcome':'Activity outcome'}</h4><p className="mt-1 text-sm text-gray-600">{currentActivityType==='SITE_MEETING'?'Capture the decision, readiness, site conditions, and next step separately so Design has a clear record.':'Record the result, follow-up, and any decision from this activity.'}</p></div>{currentActivityType==='SITE_MEETING'&&<div className="mt-4 grid gap-4 sm:grid-cols-2"><Select label="Client decision" value={outcomeDecision} set={setOutcomeDecision} options={siteMeetingDecisionOptions.map((option)=>({value:option,label:option}))}/><Select label="Site readiness" value={outcomeReadiness} set={setOutcomeReadiness} options={siteMeetingReadinessOptions.map((option)=>({value:option,label:option}))}/><Select label="Observed site conditions" value={outcomeCondition} set={setOutcomeCondition} options={siteMeetingConditionOptions.map((option)=>({value:option,label:option}))}/><Select label="Next step" value={outcomeNextStep} set={setOutcomeNextStep} options={siteMeetingNextStepOptions.map((option)=>({value:option,label:option}))}/></div>}<label className="mt-4 block text-sm font-semibold text-gray-900">{currentActivityType==='SITE_MEETING'?'Additional notes':'Outcome and follow-up notes'}<textarea rows={3} value={outcome} onChange={(event)=>setOutcome(event.target.value)} placeholder={currentActivityType==='SITE_MEETING'?'Add context, client concerns, or other details from the meeting.':'Record the result, response, and next action from this activity.'} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal"/></label>{currentActivityType==='SITE_MEETING'&&<div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-white p-3"><label className="text-sm font-semibold text-gray-900">Specific findings or follow-up items<input aria-label="Specific findings or follow-up items" value={outcomeSpecific} onChange={(event)=>setOutcomeSpecific(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'){event.preventDefault();addOutcomeSpecific();}}} placeholder="Example: Confirm equipment access with homeowner" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal"/></label><div className="mt-2 flex justify-end"><button type="button" disabled={!outcomeSpecific.trim()} onClick={addOutcomeSpecific} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 disabled:opacity-50"><Plus className="h-4 w-4"/>Add specific</button></div>{outcomeSpecifics.length>0&&<ul className="mt-3 space-y-2">{outcomeSpecifics.map((specific,index)=><li key={specific+index} className="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700"><span>{specific}</span><button type="button" onClick={()=>setOutcomeSpecifics((current)=>current.filter((_,specificIndex)=>specificIndex!==index))} className="shrink-0 text-xs font-semibold text-red-700 hover:underline">Remove</button></li>)}</ul>}</div>}<div className="mt-4 flex justify-end"><button type="button" disabled={saving||!canRecordActivity} onClick={recordSiteMeetingOutcome} className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Record site meeting outcome</button></div></div>}</div><div className="rounded-xl border border-gray-200 bg-white p-4"><label className="text-sm font-semibold text-gray-900">Site measurements, access, and feasibility notes<textarea rows={5} value={siteAssessment} onChange={(event)=>setSiteAssessment(event.target.value)} placeholder="Record measurements, equipment access, drainage, utilities, soil, HOA, and feasibility findings." className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal"/></label><div className="mt-3 flex justify-end"><button type="button" disabled={saving} onClick={saveSiteAssessment} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800">Save site assessment</button></div></div>{siteMeetingHistory.length?<div className="space-y-3"><h4 className="font-semibold text-gray-950">Activity history</h4>{siteMeetingHistory.map((consultation)=><div key={consultation.id} className="rounded-lg bg-gray-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">{consultation.subject||consultation.title}</p><span className="text-xs font-semibold text-gray-500">{consultation.activityType||'SITE_MEETING'} · {consultation.status}</span></div><p className="mt-1 text-sm text-gray-700">{consultation.outcome||consultation.notes||consultation.cancellationReason||'No outcome recorded'}</p>{consultation.nextAction&&<p className="mt-2 text-xs text-gray-600">Next action: {consultation.nextAction}{consultation.nextActionDueAt&&<> · due {new Date(consultation.nextActionDueAt).toLocaleDateString()}</>}</p>}<p className="mt-2 text-xs text-gray-500">{new Date(consultation.date).toLocaleString()}{consultation.endAt?<> – {new Date(consultation.endAt).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</>:null} · {consultation.status}</p></div>)}</div>:<p className="text-sm text-gray-500">No site meeting records have been added.</p>}</div>}
 
-          {activeTab==='FILES'&&<div className="space-y-5"><div><h3 className="font-semibold">Files</h3><p className="mt-1 text-sm text-gray-600">Upload and review inquiry documents and supporting evidence at any point in the intake process.</p></div><DocumentUpload clientId={selected.clientId} inquiryId={selected.id} documents={selected.documents||[]} onUploadComplete={()=>mutate(()=>inquiryApi.get(selected.id))}/><Metric label="Inquiry photos and documents" value={selected.documents?.length||0}/><p className="text-sm text-gray-600">Files remain available in every phase of the intake process.</p></div>}
+          {activeTab==='FILES'&&<div className="space-y-5"><div><h3 className="font-semibold">Files & conversation</h3><p className="mt-1 text-sm text-gray-600">Keep supporting documents and a concise internal contact history with this inquiry.</p></div><DocumentUpload clientId={selected.clientId} inquiryId={selected.id} documents={selected.documents||[]} onUploadComplete={()=>mutate(()=>inquiryApi.get(selected.id))}/>{(selected.documents||[]).length>0&&<section className="space-y-2" aria-label="Categorize site evidence"><h4 className="text-sm font-semibold text-gray-900">Site evidence</h4>{selected.documents!.map((document)=>{const evidence=(selected.evidence||[]).find((item)=>item.documentId===document.id);return <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3"><span className="min-w-0 truncate text-sm text-gray-800">{document.originalName}</span>{evidence?<span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800">{evidence.category.replace(/_/g,' ')}</span>:<select aria-label={`Categorize ${document.originalName} as site evidence`} defaultValue="" disabled={saving} onChange={(event)=>event.target.value&&categorizeDocumentAsEvidence(document.id,event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"><option value="">Mark as site evidence…</option><option value="SITE_PHOTO">Site photo</option><option value="SITE_PLAN">Site plan</option><option value="SURVEY">Survey</option><option value="OTHER_SITE_EVIDENCE">Other site evidence</option></select>}</div>})}</section>}<details className="rounded-xl border border-gray-200 bg-white"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900">Log a contact</summary><form onSubmit={createContactLog} className="grid gap-3 border-t border-gray-200 p-4 sm:grid-cols-2"><Select label="Channel" value={contactChannel} set={(value)=>setContactChannel(value as typeof contactChannel)} options={[{value:'PHONE',label:'Phone'},{value:'SMS',label:'Text message'},{value:'EMAIL',label:'Email'},{value:'WEBSITE',label:'Website'},{value:'IN_PERSON',label:'In person'},{value:'REFERRAL',label:'Referral'},{value:'OTHER',label:'Other'}]}/><Select label="Direction" value={contactDirection} set={(value)=>setContactDirection(value as typeof contactDirection)} options={[{value:'INBOUND',label:'Inbound'},{value:'OUTBOUND',label:'Outbound'}]}/><Field label="Contact person (optional)" value={contactPerson} set={setContactPerson}/><Select label="Outcome" value={contactOutcome} set={setContactOutcome} options={[{value:'CONNECTED',label:'Connected'},{value:'LEFT_MESSAGE',label:'Left message'},{value:'NO_ANSWER',label:'No answer'},{value:'MEETING_SCHEDULED',label:'Meeting scheduled'},{value:'FOLLOW_UP_REQUIRED',label:'Follow-up required'},{value:'OTHER',label:'Other'}]}/><Area label="Brief internal summary" value={contactSummary} set={setContactSummary} className="sm:col-span-2"/><div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:col-span-2"><p className="text-sm font-semibold text-gray-800">Follow-up task (optional)</p><p className="mt-1 text-xs text-gray-500">If added, action, owner, and due date are saved with the contact log.</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><Field label="Action" value={contactFollowUpTitle} set={setContactFollowUpTitle}/><Select label="Owner" value={contactFollowUpOwner} set={setContactFollowUpOwner} options={users.map((user)=>({value:user.id,label:user.name}))}/><Field label="Due date" type="datetime-local" value={contactFollowUpDueAt} set={setContactFollowUpDueAt}/></div></div><div className="flex justify-end sm:col-span-2"><button type="submit" disabled={saving||!contactSummary.trim()} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save contact</button></div></form></details><section className="space-y-3"><h4 className="text-sm font-semibold text-gray-900">Contact history</h4>{selected.activities?.length?<div className="space-y-2">{selected.activities.map((activity)=><article key={activity.id} className="rounded-lg border border-gray-200 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-gray-900">{activity.channel.replace(/_/g,' ')} · {activity.direction.toLowerCase()} · {activity.outcomeCode.replace(/_/g,' ').toLowerCase()}</p><span className="text-xs text-gray-500">{new Date(activity.occurredAt).toLocaleString()}</span></div><p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{activity.summary}</p><p className="mt-1 text-xs text-gray-500">{activity.actor?.name||activity.origin.replace(/_/g,' ')}{activity.contactPerson?` · with ${activity.contactPerson}`:''}</p>{activity.followUpWorkItem&&<p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900">Follow-up: {activity.followUpWorkItem.title}{activity.followUpWorkItem.dueAt?` · due ${new Date(activity.followUpWorkItem.dueAt).toLocaleDateString()}`:''}</p>}{activity.correctionOfActivityId&&<p className="mt-2 text-xs font-medium text-violet-700">Correction appended to an earlier entry</p>}</article>)}</div>:<p className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">No contact activity has been logged yet.</p>}</section><Metric label="Inquiry files" value={selected.documents?.length||0}/></div>}
 
 
-          {activeTab==='HANDOFF'&&<div className="space-y-5"><div><h3 className="font-semibold">ROM & Design handoff readiness</h3><p className="mt-1 text-sm text-gray-600">Record the commercial decision and agreement before creating the Design project.</p></div><div className="rounded-xl border border-gray-200 bg-white p-4"><h4 className="font-semibold text-gray-950">ROM approval and Design Agreement</h4><p className="mt-1 text-sm text-gray-600">A meeting or client response alone does not approve the handoff.</p><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="ROM amount or range" value={handoffForm.romAmount} set={(value)=>setHandoffForm({...handoffForm,romAmount:value})}/><Select label="ROM status" value={handoffForm.romStatus} set={(value)=>setHandoffForm({...handoffForm,romStatus:value})} options={[{value:'DRAFT',label:'Draft'},{value:'PRESENTED',label:'Presented'},{value:'APPROVED',label:'Approved'},{value:'REJECTED',label:'Rejected'},{value:'NEEDS_REVISION',label:'Needs revision'}]}/><label className="text-sm font-medium text-gray-800">ROM decision date<input type="datetime-local" value={handoffForm.romDecisionAt} onChange={(event)=>setHandoffForm({...handoffForm,romDecisionAt:event.target.value})} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label><Select label="Design Agreement status" value={handoffForm.designAgreementStatus} set={(value)=>setHandoffForm({...handoffForm,designAgreementStatus:value})} options={[{value:'NOT_REQUIRED',label:'Not required'},{value:'PENDING',label:'Pending'},{value:'ACCEPTED',label:'Accepted'},{value:'DECLINED',label:'Declined'}]}/><label className="text-sm font-medium text-gray-800">Agreement acceptance date<input type="datetime-local" value={handoffForm.designAgreementAcceptedAt} onChange={(event)=>setHandoffForm({...handoffForm,designAgreementAcceptedAt:event.target.value})} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label><Area label="Design handoff summary" value={handoffForm.handoffSummary} set={(value)=>setHandoffForm({...handoffForm,handoffSummary:value})} className="sm:col-span-2"/><Area label="ROM decision notes" value={handoffForm.proposalClientResponse} set={(value)=>setHandoffForm({...handoffForm,proposalClientResponse:value})} className="sm:col-span-2"/><Area label="Optional narrative and design proposal" value={handoffForm.proposalNarrative} set={(value)=>setHandoffForm({...handoffForm,proposalNarrative:value})} className="sm:col-span-2"/></div><p className="mt-3 text-xs text-gray-500">Approver identity is recorded as the authenticated internal user when ROM or the agreement is approved.</p><div className="mt-3 flex justify-end"><button type="button" disabled={saving} onClick={saveHandoffDetails} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800">Save ROM and handoff details</button></div></div>{blockers.length?<div className="rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="font-semibold text-amber-950">{blockers.length} item{blockers.length===1?'':'s'} need attention</p><ul className="mt-3 space-y-2">{blockers.map((blocker)=><li key={blocker} className="flex gap-2 text-sm text-amber-900"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{blocker}</li>)}</ul></div>:<div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900"><CheckCircle2 className="mr-2 inline h-5 w-5"/><span className="font-semibold">The current Design handoff requirements are complete.</span></div>}<div className="grid gap-3 sm:grid-cols-2"><ReadinessItem label="Client identity" complete={Boolean(selected.client?.name&&(selected.client?.email||selected.client?.phone))}/><ReadinessItem label="Property" complete={Boolean(selected.propertyId)}/><ReadinessItem label="Pre-design discovery" complete={selectedDiscoveryProgress.percent===100}/><ReadinessItem label="All scheduled site meetings resolved" complete={Boolean(selectedPhaseCompletions[2]?.complete)}/><ReadinessItem label="ROM approved" complete={selected.romStatus==='APPROVED'&&Boolean(selected.romDecisionAt&&selected.romApprovedBy)}/><ReadinessItem label="Design Agreement accepted or not required" complete={['ACCEPTED','NOT_REQUIRED'].includes(selected.designAgreementStatus||'')}/><ReadinessItem label="Handoff summary" complete={hasText(selected.handoffSummary)}/><ReadinessItem label="Supporting evidence uploaded" complete={Boolean(selected.documents?.length)}/></div>{showHandoffConfirm&&<div className="rounded-lg border border-violet-200 bg-violet-50 p-4"><p className="font-semibold text-violet-950">Create the Design project now?</p><p className="mt-1 text-sm text-violet-900">This will convert the Reception lead into an active client, start Design, and close this intake record. The Reception history will remain available.</p><div className="mt-4 flex flex-wrap gap-2"><button disabled={saving} onClick={completeHandoff} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving?'Creating…':'Confirm handoff'}</button><button type="button" disabled={saving} onClick={()=>setShowHandoffConfirm(false)} className="rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-semibold text-violet-900">Cancel</button></div></div>}<div className="flex flex-wrap gap-3 border-t border-gray-200 pt-5">{selected.qualificationStatus==='NEW'&&<button disabled={saving||!phaseOneComplete} title={!phaseOneComplete?'Complete every Phase 1 requirement first.':undefined} onClick={()=>changeStatus('IN_REVIEW')} className="rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-950 disabled:cursor-not-allowed disabled:opacity-50">Begin qualification review</button>}{selected.qualificationStatus==='IN_REVIEW'&&<button disabled={saving||!phaseTwoComplete} title={!phaseTwoComplete?'Complete every Phase 2 requirement first.':undefined} onClick={()=>changeStatus('QUALIFIED')} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Mark qualified</button>}{selected.qualificationStatus==='QUALIFIED'&&!showHandoffConfirm&&<button disabled={saving||!phaseThreeComplete||blockers.length>0} title={!phaseThreeComplete?'Complete Phase 3 and ROM handoff requirements first.':blockers.length?'Resolve the remaining handoff blockers first.':undefined} onClick={()=>setShowHandoffConfirm(true)} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Approve handoff & create Design project</button>}{selected.projectId&&<Link to={"/projects/"+selected.projectId} className="rounded-lg border border-violet-300 px-4 py-2 text-sm font-semibold text-violet-700">Open Design project <ArrowRight className="ml-1 inline h-4 w-4"/></Link>}</div><div className="rounded-lg border border-gray-200"><button onClick={()=>setShowMore(!showMore)} className="flex w-full items-center justify-between p-4 text-left text-sm font-semibold"><span>More intake actions</span><ChevronDown className={`h-4 w-4 transition ${showMore?'rotate-180':''}`}/></button>{showMore&&<div className="flex flex-wrap gap-2 border-t border-gray-200 p-4"><Link to={"/clients/"+selected.clientId+"/status-report?inquiryId="+selected.id+(selected.projectId?"&projectId="+selected.projectId:"")} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium">View status report</Link>{['NEW','IN_REVIEW'].includes(selected.qualificationStatus)&&<><button onClick={()=>changeStatus('NURTURED')} className="rounded-lg bg-gray-100 px-3 py-2 text-sm">Move to nurture</button><button onClick={()=>changeStatus('DECLINED')} className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Decline inquiry</button></>}</div>}</div></div>}
+          {activeTab==='FILES'&&<details className="rounded-xl border border-violet-200 bg-violet-50"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-violet-950">Record a client decision from a call, email, or meeting</summary><form onSubmit={recordExternalDisposition} className="grid gap-3 border-t border-violet-200 p-4 sm:grid-cols-2"><p className="text-sm text-violet-900 sm:col-span-2">This saves an attributed response as pending. It does not approve or convert the inquiry until an Admin reviews it.</p><Select label="Response source" value={externalDispositionChannel} set={(value)=>setExternalDispositionChannel(value as typeof externalDispositionChannel)} options={[{value:'PHONE',label:'Phone'},{value:'SMS',label:'Text message'},{value:'EMAIL',label:'Email'},{value:'IN_PERSON',label:'In person'},{value:'OTHER',label:'Other'}]}/><Select label="Client decision" value={externalDisposition} set={(value)=>setExternalDisposition(value as typeof externalDisposition)} options={[{value:'PROCEED_TO_DESIGN',label:'Proceed to Design'},{value:'MORE_INFORMATION',label:'Needs more information'},{value:'PAUSE',label:'Pause for now'},{value:'DECLINE',label:'Decline'}]}/><Area label="Brief record of the client's explicit instruction" value={externalDispositionSummary} set={setExternalDispositionSummary} className="sm:col-span-2"/><div className="flex justify-end sm:col-span-2"><button type="submit" disabled={saving||!externalDispositionSummary.trim()} className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save pending decision</button></div></form></details>}
+
+          {activeTab==='HANDOFF'&&<div className="space-y-5">
+            <div><h3 className="font-semibold">ROM & Design handoff readiness</h3><p className="mt-1 text-sm text-gray-600">Record the commercial decision and agreement before creating the Design project.</p></div>
+            <section className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="font-semibold text-blue-950">Revision-bound proposal review</h4><p className="mt-1 text-sm text-blue-900">The ROM is preliminary and non-binding. Any intake or proposal edit makes a previous review stale.</p></div><span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-blue-800">{selected.romPreviewRevision===selected.intakeRevision&&selected.romPreviewHash?'Preview saved for this revision':'Preview needs to be saved'}</span></div>
+              {selected.handoffReview&&<div className={`mt-3 rounded-lg border p-3 text-sm ${handoffReviewCurrent?'border-emerald-200 bg-emerald-50 text-emerald-900':'border-amber-200 bg-amber-50 text-amber-900'}`}><p className="font-semibold">Latest review: {selected.handoffReview.result.replace(/_/g,' ')} · revision {selected.handoffReview.intakeRevision}</p>{selected.handoffReview.reason&&<p className="mt-1">{selected.handoffReview.reason}</p>}</div>}
+              <div className="mt-3 flex justify-end"><button type="button" disabled={saving||selected.romPreviewRevision!==selected.intakeRevision||!selected.romPreviewHash} onClick={runHandoffReview} className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-900 disabled:opacity-50">Review current handoff</button></div>
+            </section>
+            <ClientDispositionReviewPanel key={`${selected.id}:${selected.intakeRevision}:${selected.clientDispositionEvidenceActivityId||'none'}`} activities={selected.activities||[]} evidenceActivityId={selected.clientDispositionEvidenceActivityId||null} reviewStatus={selected.clientDispositionReviewStatus||null} users={users} busy={saving} onSubmit={reviewClientDisposition}/>
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <h4 className="font-semibold text-gray-950">ROM approval and Design Agreement</h4>
+              <p className="mt-1 text-sm text-gray-600">A meeting or client response alone does not approve the handoff.</p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field label="ROM amount or range" value={handoffForm.romAmount} set={(value)=>setHandoffForm({...handoffForm,romAmount:value})}/>
+                <Select label="ROM status" value={handoffForm.romStatus} set={(value)=>setHandoffForm({...handoffForm,romStatus:value})} options={[{value:'DRAFT',label:'Draft'},{value:'PRESENTED',label:'Presented'},{value:'APPROVED',label:'Approved'},{value:'REJECTED',label:'Rejected'},{value:'NEEDS_REVISION',label:'Needs revision'}]}/>
+                <label className="text-sm font-medium text-gray-800">Date presented to client<input type="datetime-local" value={handoffForm.proposalProvidedAt} onChange={(event)=>setHandoffForm({...handoffForm,proposalProvidedAt:event.target.value})} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>
+                <label className="text-sm font-medium text-gray-800">ROM decision date<input type="datetime-local" value={handoffForm.romDecisionAt} onChange={(event)=>setHandoffForm({...handoffForm,romDecisionAt:event.target.value})} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>
+                <Select label="Design Agreement status" value={handoffForm.designAgreementStatus} set={(value)=>setHandoffForm({...handoffForm,designAgreementStatus:value})} options={[{value:'NOT_REQUIRED',label:'Not required'},{value:'PENDING',label:'Pending'},{value:'ACCEPTED',label:'Accepted'},{value:'DECLINED',label:'Declined'}]}/>
+                {handoffForm.designAgreementStatus==='NOT_REQUIRED'&&<Area label="Admin reason this agreement is not required" value={handoffForm.designAgreementNotRequiredReason} set={(value)=>setHandoffForm({...handoffForm,designAgreementNotRequiredReason:value})}/>}
+                <label className="text-sm font-medium text-gray-800">Agreement acceptance date<input type="datetime-local" value={handoffForm.designAgreementAcceptedAt} onChange={(event)=>setHandoffForm({...handoffForm,designAgreementAcceptedAt:event.target.value})} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>
+                <Area label="Design handoff summary" value={handoffForm.handoffSummary} set={(value)=>setHandoffForm({...handoffForm,handoffSummary:value})} className="sm:col-span-2"/>
+                <Area label="ROM decision notes" value={handoffForm.proposalClientResponse} set={(value)=>setHandoffForm({...handoffForm,proposalClientResponse:value})} className="sm:col-span-2"/>
+                <Area label="Optional narrative and design proposal" value={handoffForm.proposalNarrative} set={(value)=>setHandoffForm({...handoffForm,proposalNarrative:value})} className="sm:col-span-2"/>
+              </div>
+              <p className="mt-3 text-xs text-gray-500">Approver identity is recorded as the authenticated internal user when ROM or the agreement is approved.</p>
+              <div className="mt-3 flex justify-end"><button type="button" disabled={saving|| (handoffForm.designAgreementStatus==='NOT_REQUIRED'&&!handoffForm.designAgreementNotRequiredReason.trim())} onClick={saveHandoffDetails} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 disabled:opacity-50">Save ROM details and refresh preview</button></div>
+            </div>
+            {blockers.length?<div className="rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="font-semibold text-amber-950">{blockers.length} item{blockers.length===1?'':'s'} need attention</p><ul className="mt-3 space-y-2">{blockers.map((blocker)=><li key={blocker} className="flex gap-2 text-sm text-amber-900"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{blocker}</li>)}</ul></div>:<div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900"><CheckCircle2 className="mr-2 inline h-5 w-5"/><span className="font-semibold">The current Design handoff requirements are complete.</span></div>}
+            <div className="grid gap-3 sm:grid-cols-2"><ReadinessItem label="Client identity" complete={Boolean(selected.client?.name&&(selected.client?.email||selected.client?.phone))}/><ReadinessItem label="Property" complete={Boolean(selected.propertyId)}/><ReadinessItem label="Pre-design discovery" complete={selectedDiscoveryProgress.percent===100}/><ReadinessItem label="Completed onsite meeting" complete={Boolean(selectedPhaseCompletions[2]?.complete)}/><ReadinessItem label="ROM approved" complete={selected.romStatus==='APPROVED'&&Boolean(selected.romDecisionAt&&selected.romApprovedBy)}/><ReadinessItem label="Design Agreement accepted or Admin exception" complete={selected.designAgreementStatus==='ACCEPTED'||(selected.designAgreementStatus==='NOT_REQUIRED'&&selected.readiness?.criteria.find((item)=>item.id==='DESIGN_AGREEMENT')?.complete===true)}/><ReadinessItem label="Handoff summary" complete={hasText(selected.handoffSummary)}/><ReadinessItem label="Categorized site evidence" complete={Boolean(selected.evidence?.length)}/></div>
+            {showHandoffConfirm&&<div className="rounded-lg border border-violet-200 bg-violet-50 p-4"><p className="font-semibold text-violet-950">Create the Design project now?</p><p className="mt-1 text-sm text-violet-900">This will convert the Reception lead into an active client, start Design, and close this intake record. The approved ROM snapshot and Reception history remain available.</p><div className="mt-4 flex flex-wrap gap-2"><button disabled={saving||!handoffReviewCurrent} onClick={completeHandoff} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving?'Creating…':'Confirm handoff'}</button><button type="button" disabled={saving} onClick={()=>setShowHandoffConfirm(false)} className="rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-semibold text-violet-900">Cancel</button></div></div>}
+            <div className="flex flex-wrap gap-3 border-t border-gray-200 pt-5">{selected.qualificationStatus==='NEW'&&<button disabled={saving||!phaseOneComplete} title={!phaseOneComplete?'Complete every Phase 1 requirement first.':undefined} onClick={()=>changeStatus('IN_REVIEW')} className="rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-950 disabled:cursor-not-allowed disabled:opacity-50">Begin qualification review</button>}{selected.qualificationStatus==='IN_REVIEW'&&<button disabled={saving||!phaseTwoComplete} title={!phaseTwoComplete?'Complete every Phase 2 requirement first.':undefined} onClick={()=>changeStatus('QUALIFIED')} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Mark qualified</button>}{selected.qualificationStatus==='QUALIFIED'&&!showHandoffConfirm&&<button disabled={saving||!handoffReviewCurrent} title={!handoffReviewCurrent?'Save the current ROM and pass a revision-bound handoff review first.':undefined} onClick={()=>setShowHandoffConfirm(true)} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Approve handoff & create Design project</button>}{selected.projectId&&<Link to={'/projects/'+selected.projectId} className="rounded-lg border border-violet-300 px-4 py-2 text-sm font-semibold text-violet-700">Open Design project <ArrowRight className="ml-1 inline h-4 w-4"/></Link>}</div>
+            <div className="rounded-lg border border-gray-200"><button onClick={()=>setShowMore(!showMore)} className="flex w-full items-center justify-between p-4 text-left text-sm font-semibold"><span>More intake actions</span><ChevronDown className={`h-4 w-4 transition ${showMore?'rotate-180':''}`}/></button>{showMore&&<div className="flex flex-wrap gap-2 border-t border-gray-200 p-4"><Link to={'/clients/'+selected.clientId+'/status-report?inquiryId='+selected.id+(selected.projectId?'&projectId='+selected.projectId:'')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium">View status report</Link>{['NEW','IN_REVIEW'].includes(selected.qualificationStatus)&&<><button onClick={()=>changeStatus('NURTURED')} className="rounded-lg bg-gray-100 px-3 py-2 text-sm">Move to nurture</button><button onClick={()=>changeStatus('DECLINED')} className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Decline inquiry</button></>}</div>}</div>
+          </div>}
         </div>
       </FormModal>}
     </div>
@@ -777,14 +973,17 @@ export default function Inquiries() {
       description="Update the information that will move forward into Design."
       busy={saving}
       submitLabel="Save intake changes"
-      onClose={()=>setShowEdit(false)}
-      onSubmit={(event)=>{event.preventDefault();mutate(async()=>{const {leadName,leadEmail,leadPhone,address,city,state,postalCode,...inquiryData}=editForm;await clientApi.update(selected.clientId,{name:leadName,email:leadEmail,phone:leadPhone});await inquiryApi.update(selected.id,{...inquiryData,nextActionDueAt:inquiryData.nextActionDueAt||null,...(address.trim()?{property:{address,city:city||null,state:state||null,postalCode:postalCode||null}}:{})});setShowEdit(false);});}}
+      onClose={closeEdit}
+      onSubmit={(event)=>{event.preventDefault();if(!editForm.leadEmail.trim()&&!editForm.leadPhone.trim()){setError('Enter an email address or phone number so Reception can follow up.');return;}mutate(async()=>{const {leadName,leadEmail,leadPhone,address,city,state,postalCode,...inquiryData}=editForm;await inquiryApi.updateIntake(selected.id,{expectedIntakeRevision:selected.intakeRevision,client:{name:leadName,email:leadEmail.trim()||null,phone:leadPhone.trim()||null},...(address.trim()?{property:{address:address.trim(),city:city.trim()||null,state:state.trim()||null,postalCode:postalCode.trim()||null}}:{}),inquiry:{...inquiryData,source:inquiryData.source.trim()||null,nextAction:inquiryData.nextAction.trim()||null,nextActionDueAt:inquiryData.nextActionDueAt||null}});editFormBaseline.current=JSON.stringify(editForm);setShowEdit(false);});}}
     >
+      {(error||hasIntakeConflict)&&<div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">{hasIntakeConflict&&<><p className="font-semibold">This inquiry was updated elsewhere.</p><p className="mt-1">Your unsaved draft is still here. Review the latest saved record before trying again.</p><button type="button" onClick={()=>{if(selected)void select(selected);}} className="mt-3 rounded-lg border border-amber-400 bg-white px-3 py-2 font-semibold hover:bg-amber-100">Load latest and discard this draft</button></>}{error&&!hasIntakeConflict&&<p>{error}</p>}</div>}
+      <fieldset disabled={saving} className="space-y-6">
       <FormSection title="Lead contact"><Field label="Lead name" value={editForm.leadName} set={(value)=>setEditForm({...editForm,leadName:value})} required/><Field label="Lead email" value={editForm.leadEmail} set={(value)=>setEditForm({...editForm,leadEmail:value})}/><Field label="Lead phone" value={editForm.leadPhone} set={(value)=>setEditForm({...editForm,leadPhone:value})}/></FormSection>
       <FormSection title="Project vision"><Area label="What would the client like to create or change?" value={editForm.description} set={(value)=>setEditForm({...editForm,description:value})}/><Area label="What should the finished project accomplish?" value={editForm.objectives} set={(value)=>setEditForm({...editForm,objectives:value})}/><Area label="Preliminary features or scope" value={editForm.preliminaryScope} set={(value)=>setEditForm({...editForm,preliminaryScope:value})} className="md:col-span-2"/><Area label="Design inspirations or reference links" value={editForm.designInspirations} set={(value)=>setEditForm({...editForm,designInspirations:value})} className="md:col-span-2"/></FormSection>
       <FormSection title="Property"><Field label="Property address" value={editForm.address} set={(value)=>setEditForm({...editForm,address:value})}/><Field label="City" value={editForm.city} set={(value)=>setEditForm({...editForm,city:value})}/><Field label="State" value={editForm.state} set={(value)=>setEditForm({...editForm,state:value})}/><Field label="Postal code" value={editForm.postalCode} set={(value)=>setEditForm({...editForm,postalCode:value})}/></FormSection>
       <FormSection title="Expectations"><Field label="Budget expectation" value={editForm.budgetExpectation} set={(value)=>setEditForm({...editForm,budgetExpectation:value})}/><Field label="Desired timing" value={editForm.desiredTiming} set={(value)=>setEditForm({...editForm,desiredTiming:value})}/><ChannelSelect value={editForm.source} set={(value)=>setEditForm({...editForm,source:value})}/></FormSection>
       <FormSection title="Reception follow-up"><Field label="Next action" value={editForm.nextAction} set={(value)=>setEditForm({...editForm,nextAction:value})}/><label className="text-sm font-medium text-gray-800">Next action due<input type="datetime-local" value={editForm.nextActionDueAt} onChange={(event)=>setEditForm({...editForm,nextActionDueAt:event.target.value})} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label></FormSection>
+      </fieldset>
     </FormModal>}
     {selected&&<FormModal open={showRomEditor} title="Edit ROM proposal" description="Proposal-specific edits are saved with this inquiry and do not overwrite discovery answers." busy={saving} submitLabel="Save ROM draft" busyLabel="Saving…" maxWidthClass="max-w-5xl" onClose={()=>setShowRomEditor(false)} onSubmit={saveRomProposal}>
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">Inquiry answers are the starting point</p><p className="mt-1">Fields with recorded answers are prefilled from the inquiry. Change any wording for this proposal; use “Reset to inquiry answer” to remove that override. Fields without an inquiry answer start empty.</p></div>
@@ -830,8 +1029,59 @@ export default function Inquiries() {
         <footer className="border-t border-gray-200 pt-4 text-center text-xs text-gray-500">Signature Exteriors · Preliminary planning document · {new Date().toLocaleDateString()}</footer>
       </article>
     </FormModal>}
-    {selected&&statusAction&&<FormModal open title={statusAction==='DECLINED'?'Decline inquiry':'Move inquiry to nurture'} description="Record why this Reception lead is leaving the active queue." busy={saving} submitLabel={statusAction==='DECLINED'?'Decline inquiry':'Move to nurture'} onClose={()=>setStatusAction(null)} onSubmit={(event)=>{event.preventDefault();mutate(async()=>{await inquiryApi.setStatus(selected.id,statusAction,statusReason);setStatusAction(null);});}}><label className="text-sm font-medium text-gray-800">Reason<textarea required rows={4} value={statusReason} onChange={(event)=>setStatusReason(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label></FormModal>}
+    {selected&&statusAction&&<FormModal open title={statusAction==='DECLINED'?'Decline inquiry':'Move inquiry to nurture'} description="Record why this Reception lead is leaving the active queue." busy={saving} submitLabel={statusAction==='DECLINED'?'Decline inquiry':'Move to nurture'} onClose={()=>setStatusAction(null)} onSubmit={(event)=>{event.preventDefault();mutate(async()=>{await inquiryApi.setStatus(selected.id,statusAction,selected.intakeRevision,statusReason);setStatusAction(null);});}}><label className="text-sm font-medium text-gray-800">Reason<textarea required rows={4} value={statusReason} onChange={(event)=>setStatusReason(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label></FormModal>}
   </div>;
+}
+
+function ClientDispositionReviewPanel({activities,evidenceActivityId,reviewStatus,users,busy,onSubmit}:{activities:InquiryActivity[];evidenceActivityId:string|null;reviewStatus:string|null;users:User[];busy:boolean;onSubmit:(activityId:string,payload:Record<string,unknown>)=>void}) {
+  const pending = reviewStatus === 'PENDING_REVIEW'
+    ? activities.find((activity)=>activity.id===evidenceActivityId&&activity.outcomeCode==='CLIENT_DISPOSITION_RECEIVED')
+    : undefined;
+  const [reason,setReason] = useState('');
+  const [nextReviewAt,setNextReviewAt] = useState('');
+  const [followUpTitle,setFollowUpTitle] = useState('');
+  const [followUpOwnerId,setFollowUpOwnerId] = useState('');
+  const [followUpDueAt,setFollowUpDueAt] = useState('');
+  const [attested,setAttested] = useState(false);
+  if (!pending) return null;
+  const disposition = pending.clientDispositionValue as 'PROCEED_TO_DESIGN'|'MORE_INFORMATION'|'PAUSE'|'DECLINE';
+  let romSnapshotText='';
+  try { romSnapshotText=pending.clientRomSnapshot?JSON.stringify(JSON.parse(pending.clientRomSnapshot),null,2):''; } catch { romSnapshotText='The saved response snapshot could not be displayed.'; }
+  const send = (event:FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSubmit(pending.id,{
+      disposition, attested:true, reason:reason.trim()||null,
+      ...(disposition==='PAUSE'&&nextReviewAt?{nextReviewAt:new Date(nextReviewAt).toISOString()}:{}),
+      ...(disposition==='MORE_INFORMATION'?{followUp:{title:followUpTitle.trim(),ownerId:followUpOwnerId,dueAt:new Date(followUpDueAt).toISOString()}}:{}),
+    });
+  };
+  return <section className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+    <div><h4 className="font-semibold text-violet-950">Client response awaiting review</h4><p className="mt-1 text-sm text-violet-900">{pending.origin==='CLIENT_PORTAL'?'Submitted in the client portal':'Recorded from an external conversation'} · {pending.channel.replace(/_/g,' ')} · {new Date(pending.occurredAt).toLocaleString()}</p><p className="mt-2 text-sm font-semibold text-gray-950">Requested decision: {disposition.replace(/_/g,' ')}</p><p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{pending.outcomeDetail||pending.summary}</p></div>
+    {romSnapshotText&&<details className="rounded-lg border border-violet-200 bg-white p-3"><summary className="cursor-pointer text-sm font-semibold text-violet-950">ROM version the client reviewed</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-gray-700">{romSnapshotText}</pre></details>}
+    <form onSubmit={send} className="mt-4 grid gap-3 border-t border-violet-200 pt-4 sm:grid-cols-2">
+      {disposition==='MORE_INFORMATION'&&<><Field label="Follow-up action" value={followUpTitle} set={setFollowUpTitle} required/><Select label="Follow-up owner" value={followUpOwnerId} set={setFollowUpOwnerId} options={users.filter((user)=>user.active&&user.role==='ADMIN').map((user)=>({value:user.id,label:user.name}))} required/><Field label="Follow-up due" type="datetime-local" value={followUpDueAt} set={setFollowUpDueAt} required/></>}
+      {disposition==='PAUSE'&&<label className="text-sm font-medium text-gray-800">Next review date<input type="date" required value={nextReviewAt} onChange={(event)=>setNextReviewAt(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>}
+      {['PAUSE','DECLINE'].includes(disposition)&&<Area label={disposition==='DECLINE'?'Decline reason':'Reason for pause'} value={reason} set={setReason} className="sm:col-span-2"/>}
+      {disposition==='MORE_INFORMATION'&&<Area label="Review notes (optional)" value={reason} set={setReason} className="sm:col-span-2"/>}
+      <label className="flex items-start gap-2 text-sm text-violet-950 sm:col-span-2"><input type="checkbox" required checked={attested} onChange={(event)=>setAttested(event.target.checked)} className="mt-1"/><span>I reviewed the linked response and confirm it accurately records the client’s explicit instruction.</span></label>
+      <div className="flex justify-end sm:col-span-2"><button type="submit" disabled={busy||!attested||(disposition==='MORE_INFORMATION'&&(!followUpTitle.trim()||!followUpOwnerId||!followUpDueAt))||(disposition==='PAUSE'&&(!reason.trim()||!nextReviewAt))||(disposition==='DECLINE'&&!reason.trim())} className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy?'Saving…':'Confirm client response'}</button></div>
+    </form>
+  </section>;
+}
+
+function LegacyCriterionReviewPanel({inquiry,criteria,saving,onSave}:{inquiry:Inquiry;criteria:ReceptionCriterionReadiness[];saving:boolean;onSave:(criterionId:string,answerState:'CONFIRMED'|'UNKNOWN'|'NOT_APPLICABLE',reason?:string,answerValue?:string)=>void}) {
+  const [reasons,setReasons] = useState<Record<string,string>>({});
+  return <section aria-label="Review existing intake answers" className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+    <div><h3 className="font-semibold text-amber-950">Review saved answers</h3><p className="mt-1 text-sm text-amber-900">Legacy values need an explicit check before they count toward phase readiness. Confirm only what still reflects the client’s answer; correct inaccurate values in the inquiry fields first.</p></div>
+    <div className="mt-3 space-y-3">{criteria.map((criterion)=><div key={criterion.id} className="rounded-lg border border-amber-200 bg-white p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold text-gray-950">{criterion.label}</p><p className="mt-1 break-words text-sm text-gray-700">{legacyCriterionPreview(inquiry,criterion.id)}</p><p className="mt-1 text-xs text-gray-500">{criterion.answerState==='NEEDS_REVIEW'?'Needs Admin review':'No answer recorded yet'} · {criterion.fieldPaths.join(', ')}</p></div>
+        <div className="flex shrink-0 flex-wrap gap-2">{criterion.answerState==='NEEDS_REVIEW'&&(criterion.hasAnswer||(criterion.id==='DESIGN_AGREEMENT'&&inquiry.designAgreementStatus==='NOT_REQUIRED'))&&<button type="button" disabled={saving||(criterion.id==='DESIGN_AGREEMENT'&&!reasons[criterion.id]?.trim())} onClick={()=>onSave(criterion.id,'CONFIRMED',criterion.id==='DESIGN_AGREEMENT'?reasons[criterion.id]:undefined)} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm saved answer</button>}{criterion.answerState==='UNKNOWN'&&criterion.id==='MUST_HAVE_FEATURES'&&<button type="button" disabled={saving} onClick={()=>onSave(criterion.id,'CONFIRMED',undefined,'NONE_IDENTIFIED')} className="rounded-lg border border-blue-300 px-3 py-2 text-xs font-semibold text-blue-800 disabled:opacity-50">None identified</button>}{criterion.answerState==='UNKNOWN'&&criterion.id==='INSPIRATION_STATUS'&&<button type="button" disabled={saving} onClick={()=>onSave(criterion.id,'CONFIRMED',undefined,'NONE_PROVIDED')} className="rounded-lg border border-blue-300 px-3 py-2 text-xs font-semibold text-blue-800 disabled:opacity-50">None provided</button>}</div>
+      </div>
+      {criterion.id==='SURVEY_STATUS'&&criterion.notApplicableAllowed&&<div className="mt-3 flex flex-col gap-2 sm:flex-row"><input aria-label="Admin reason for survey not applicable" value={reasons[criterion.id]||''} onChange={(event)=>setReasons((current)=>({...current,[criterion.id]:event.target.value}))} placeholder="Admin reason if a survey is not applicable" className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"/><button type="button" disabled={saving||!reasons[criterion.id]?.trim()} onClick={()=>onSave(criterion.id,'NOT_APPLICABLE',reasons[criterion.id])} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold disabled:opacity-50">Mark not applicable</button></div>}
+      {criterion.id==='DESIGN_AGREEMENT'&&inquiry.designAgreementStatus==='NOT_REQUIRED'&&<input aria-label="Admin reason for design agreement not required" value={reasons[criterion.id]||''} onChange={(event)=>setReasons((current)=>({...current,[criterion.id]:event.target.value}))} placeholder="Why is a Design Agreement not required?" className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}
+      {criterion.answerState==='NEEDS_REVIEW'&&!criterion.hasAnswer&&!(criterion.id==='DESIGN_AGREEMENT'&&inquiry.designAgreementStatus==='NOT_REQUIRED')&&<p className="mt-2 text-xs text-amber-800">This value is missing or unsupported, so it cannot be confirmed as-is. Update the canonical answer in its section, then save.</p>}
+    </div>)}</div>
+  </section>;
 }
 
 function InquiryPhaseProgress({completions,activePhaseIndex,onOpen}:{completions:Array<{requirements:Array<{label:string;complete:boolean}>;complete:boolean}>;activePhaseIndex:number;onOpen:(tab:TabKey)=>void}) {

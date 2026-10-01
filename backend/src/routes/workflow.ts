@@ -1,4 +1,5 @@
 import express from 'express';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
@@ -30,6 +31,11 @@ const workItemCreateSchema = z.object({
 const workItemUpdateSchema = workItemCreateSchema.partial().omit({ stage: true }).extend({
   status: z.enum(WORK_ITEM_STATUSES).optional(),
 });
+
+const workItemCompletionSchema = z.object({
+  expectedIntakeRevision: z.number().int().positive().optional(),
+  idempotencyKey: z.string().trim().min(8).max(200).optional(),
+}).strict();
 
 const decisionCreateSchema = z.object({
   stage: z.enum(LIFECYCLE_STAGES),
@@ -210,27 +216,77 @@ router.post('/work-items/:id/complete', async (req: AuthRequest, res, next) => {
     await assertWorkItemAccess(req, before);
     const internal = req.user?.role === 'ADMIN';
     if (!internal && (!before.clientVisible || before.ownerId !== req.user?.id)) throw new AppError('You cannot complete this work item.', 403, 'FORBIDDEN');
-    if (['COMPLETED', 'READY_FOR_REVIEW', 'VERIFIED', 'CLOSED'].includes(before.status)) return res.json(before);
+    const completion = workItemCompletionSchema.parse(req.body ?? {});
+    const clientInquiryResponse = !internal && Boolean(before.inquiryId);
+    if (clientInquiryResponse && (!completion.expectedIntakeRevision || !completion.idempotencyKey)) {
+      throw new AppError('A current inquiry revision and idempotency key are required to submit a client response.', 400, 'VALIDATION_ERROR');
+    }
+    const sourceEventId = clientInquiryResponse ? `${req.user!.id}:${completion.idempotencyKey}` : null;
+    const responseFingerprint = createHash('sha256').update(JSON.stringify({ workItemId: before.id, outcomeCode: 'CLIENT_RESPONSE_RECEIVED' })).digest('hex');
+    if (sourceEventId) {
+      const replay = await prisma.inquiryActivity.findFirst({ where: { origin: 'CLIENT_PORTAL', sourceEventId } });
+      if (replay) {
+        if (replay.inquiryId !== before.inquiryId || replay.outcomeCode !== 'CLIENT_RESPONSE_RECEIVED' || replay.requestFingerprint !== responseFingerprint) {
+          throw new AppError('This idempotency key was already used for a different response.', 409, 'IDEMPOTENCY_KEY_REUSED');
+        }
+        const inquiry = await prisma.inquiry.findUnique({ where: { id: before.inquiryId! }, select: { intakeRevision: true } });
+        return res.json({ ...before, inquiryRevision: inquiry?.intakeRevision });
+      }
+    }
+    if (['COMPLETED', 'READY_FOR_REVIEW', 'VERIFIED', 'CLOSED'].includes(before.status)) {
+      const inquiry = before.inquiryId ? await prisma.inquiry.findUnique({ where: { id: before.inquiryId }, select: { intakeRevision: true } }) : null;
+      return res.json({ ...before, ...(inquiry ? { inquiryRevision: inquiry.intakeRevision } : {}) });
+    }
     const status = before.reviewerId ? 'READY_FOR_REVIEW' : 'COMPLETED';
-    const item = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      let inquiryRevision: number | undefined;
+      let inquiryClientId: string | undefined;
+      if (clientInquiryResponse) {
+        const inquiry = await tx.inquiry.findUnique({ where: { id: before.inquiryId! }, select: { id: true, clientId: true, intakeRevision: true } });
+        if (!inquiry || inquiry.intakeRevision !== completion.expectedIntakeRevision) {
+          throw new AppError('This inquiry changed after you opened it. Review the latest saved information and try again.', 409, 'STALE_INTAKE_REVISION', {
+            expectedIntakeRevision: completion.expectedIntakeRevision,
+            currentIntakeRevision: inquiry?.intakeRevision,
+          });
+        }
+        const advanced = await tx.inquiry.updateMany({
+          where: { id: inquiry.id, intakeRevision: completion.expectedIntakeRevision },
+          data: { intakeRevision: { increment: 1 } },
+        });
+        if (advanced.count !== 1) throw new AppError('This inquiry changed while the response was being saved. Reload and try again.', 409, 'STALE_INTAKE_REVISION');
+        inquiryRevision = inquiry.intakeRevision + 1;
+        inquiryClientId = inquiry.clientId;
+      }
       const updated = await tx.workItem.update({ where: { id: before.id }, data: { status, completedAt: new Date() } });
       await writeAuditEvent(tx, { userId: req.user!.id, action: 'COMPLETE', entityType: 'WorkItem', entityId: updated.id, requestId: (req as any).requestId, before, after: updated });
+      if (clientInquiryResponse && sourceEventId && inquiryClientId) {
+        await tx.inquiryActivity.create({ data: {
+          inquiryId: before.inquiryId!, clientId: inquiryClientId, actorId: req.user!.id,
+          origin: 'CLIENT_PORTAL', sourceEventId, channel: 'WEBSITE', direction: 'INBOUND',
+          occurredAt: updated.completedAt || new Date(), organizationTimezone: 'America/Phoenix',
+          summary: `Client responded to information request: ${before.title}`,
+          outcomeCode: 'CLIENT_RESPONSE_RECEIVED', outcomeDetail: before.description || null,
+          requestFingerprint: responseFingerprint,
+        } });
+      }
       if (!internal && before.reviewerId && before.inquiryId) {
-        const inquiry = await tx.inquiry.findUnique({ where: { id: before.inquiryId }, select: { clientId: true } });
-        if (inquiry) await tx.notification.create({
+        const inquiryClient = inquiryClientId
+          ? { clientId: inquiryClientId }
+          : await tx.inquiry.findUnique({ where: { id: before.inquiryId }, select: { clientId: true } });
+        if (inquiryClient) await tx.notification.create({
           data: {
             userId: before.reviewerId,
             type: 'INQUIRY_INFORMATION_PROVIDED',
             message: `Client information is ready for review: ${before.title}`,
-            clientId: inquiry.clientId,
+            clientId: inquiryClient.clientId,
             inquiryId: before.inquiryId,
             itemId: before.id,
           },
         });
       }
-      return updated;
+      return { item: updated, inquiryRevision };
     });
-    res.json(item);
+    res.json({ ...result.item, ...(result.inquiryRevision ? { inquiryRevision: result.inquiryRevision } : {}) });
   } catch (error) { next(error); }
 });
 

@@ -53,6 +53,7 @@ async function processJob(jobId: string): Promise<void> {
       const updatedInquiry = await tx.inquiry.update({
         where: { id: job.inquiryId },
         data: {
+          intakeRevision: { increment: 1 },
           complianceVerificationStatus: finalStatus,
           complianceVerificationCheckedAt: now,
           complianceVerificationSource: 'Automated public web research',
@@ -91,7 +92,7 @@ async function processJob(jobId: string): Promise<void> {
       : 'Research could not complete. Review the address and source links, then retry.';
     await prisma.$transaction([
       prisma.complianceResearchJob.update({ where: { id: jobId }, data: { status: 'FAILED', progress: 100, errorMessage: publicMessage, completedAt: new Date() } }),
-      prisma.inquiry.update({ where: { id: job.inquiryId }, data: { complianceVerificationStatus: 'FAILED', complianceVerificationCheckedAt: new Date(), complianceVerificationNotes: publicMessage } }),
+      prisma.inquiry.update({ where: { id: job.inquiryId }, data: { intakeRevision: { increment: 1 }, complianceVerificationStatus: 'FAILED', complianceVerificationCheckedAt: new Date(), complianceVerificationNotes: publicMessage } }),
       prisma.activityLog.create({
         data: {
           userId: job.requestedBy,

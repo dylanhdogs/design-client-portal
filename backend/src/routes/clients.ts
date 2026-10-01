@@ -157,16 +157,23 @@ router.put('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
     const { id } = req.params;
     const data = updateClientSchema.parse(req.body);
     
-    const client = await prisma.client.update({
-      where: { id },
-      data: {
-        ...data,
-        email: data.email || null,
-        company: data.company || null,
-        phone: data.phone || null,
-        address: data.address || null,
-        notes: data.notes || null
-      }
+    const client = await prisma.$transaction(async (tx) => {
+      const updated = await tx.client.update({
+        where: { id },
+        data: {
+          ...data,
+          email: data.email || null,
+          company: data.company || null,
+          phone: data.phone || null,
+          address: data.address || null,
+          notes: data.notes || null
+        }
+      });
+      await tx.inquiry.updateMany({
+        where: { clientId: id, qualificationStatus: { in: ['NEW', 'IN_REVIEW', 'QUALIFIED'] } },
+        data: { intakeRevision: { increment: 1 } },
+      });
+      return updated;
     });
 
     logActivity((req as any).user.id, 'UPDATE', 'Client', id, { name: client.name });

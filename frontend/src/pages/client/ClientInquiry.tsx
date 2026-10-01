@@ -38,6 +38,8 @@ export default function ClientInquiry() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [form, setForm] = useState<InquiryForm>(emptyForm);
+  const [romDisposition, setRomDisposition] = useState<'PROCEED_TO_DESIGN' | 'MORE_INFORMATION' | 'PAUSE' | 'DECLINE'>('PROCEED_TO_DESIGN');
+  const [romComment, setRomComment] = useState('');
 
   const current = useMemo(
     () => items.find((item) => item.qualificationStatus !== 'DECLINED') || null,
@@ -79,7 +81,7 @@ export default function ClientInquiry() {
     try {
       setSaving(true); setError(''); setSuccess('');
       const inquiry = editable
-        ? (await inquiryApi.update(current!.id, payload())).data as Inquiry
+        ? (await inquiryApi.update(current!.id, payload(), current!.intakeRevision)).data as Inquiry
         : (await inquiryApi.create(payload())).data as Inquiry;
 
       if (file && user?.clientId) {
@@ -90,9 +92,14 @@ export default function ClientInquiry() {
       }
 
       if (editable && openRequests.length) {
-        await Promise.all(openRequests
-          .filter((work) => !['COMPLETED', 'READY_FOR_REVIEW'].includes(work.status))
-          .map((work) => workflowApi.completeWorkItem(work.id)));
+        let inquiryRevision = inquiry.intakeRevision;
+        for (const work of openRequests.filter((item) => !['COMPLETED', 'READY_FOR_REVIEW'].includes(item.status))) {
+          const response = await workflowApi.completeWorkItem(work.id, {
+            expectedIntakeRevision: inquiryRevision,
+            idempotencyKey: crypto.randomUUID(),
+          });
+          inquiryRevision = response.data.inquiryRevision ?? inquiryRevision;
+        }
       }
 
       setSuccess(editable
@@ -102,6 +109,25 @@ export default function ClientInquiry() {
       await load();
     } catch (err) {
       setError(getApiErrorMessage(err, editable ? 'Your updates could not be saved.' : 'Your inquiry could not be submitted.'));
+    } finally { setSaving(false); }
+  };
+
+  const submitRomDisposition = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!current?.clientRomPreview?.presentedAt) return;
+    try {
+      setSaving(true); setError(''); setSuccess('');
+      await inquiryApi.submitDispositionResponse(current.id, {
+        disposition: romDisposition,
+        comment: romComment.trim() || null,
+        expectedIntakeRevision: current.intakeRevision,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setSuccess('Your response was sent to our team for review. It does not sign a construction contract or authorize construction.');
+      setRomComment('');
+      await load();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Your ROM response could not be submitted.'));
     } finally { setSaving(false); }
   };
 
@@ -118,6 +144,16 @@ export default function ClientInquiry() {
       {current.qualificationStatus === 'CONVERTED' && <div className="mt-4 rounded-lg bg-green-50 p-4 text-sm text-green-900">This inquiry is now your active project. <a href="/my-project" className="font-semibold text-blue-700 underline">View your project</a>.</div>}
     </section>}
 
+    {current&&(current.clientRomPreview||current.pendingClientDisposition||(current.clientDispositionReviewStatus==='REVIEWED'&&current.clientDispositionSource==='CLIENT_PORTAL')) && <ClientRomResponse
+      inquiry={current}
+      busy={saving}
+      disposition={romDisposition}
+      setDisposition={setRomDisposition}
+      comment={romComment}
+      setComment={setRomComment}
+      onSubmit={submitRomDisposition}
+    />}
+
     {!current && items.length > 0 && !startDifferentProject && <section className="rounded-xl border border-gray-200 bg-white p-5"><h2 className="font-semibold">Previous inquiry closed</h2><p className="mt-1 text-sm text-gray-600">Only start another inquiry if this is for a different project.</p><button type="button" onClick={() => { setForm(emptyForm); setStartDifferentProject(true); }} className="mt-4 rounded-lg border border-blue-600 px-4 py-2 text-sm font-medium text-blue-700">Start a different project</button></section>}
 
     {showForm && <form onSubmit={submit} className="space-y-6 rounded-xl border border-gray-200 bg-white p-5">
@@ -129,6 +165,53 @@ export default function ClientInquiry() {
     </form>}
   </div>;
 }
+
+function ClientRomResponse({inquiry,busy,disposition,setDisposition,comment,setComment,onSubmit}:{
+  inquiry:Inquiry; busy:boolean; disposition:'PROCEED_TO_DESIGN'|'MORE_INFORMATION'|'PAUSE'|'DECLINE';
+  setDisposition:(value:'PROCEED_TO_DESIGN'|'MORE_INFORMATION'|'PAUSE'|'DECLINE')=>void;
+  comment:string; setComment:(value:string)=>void; onSubmit:(event:FormEvent)=>void;
+}) {
+  const preview = inquiry.clientRomPreview;
+  const proposalLabels:Record<string,string> = {
+    projectNarrative:'Project narrative', designBuildOverview:'Design and build overview', proposedScope:'Proposed scope',
+    exclusions:'Exclusions', designDeliverables:'Design deliverables', clientResponsibilities:'Client responsibilities',
+    milestones:'Target schedule and milestones', allowancesOptions:'Allowances and options', assumptions:'Assumptions and items to verify',
+    depositTerms:'Design fee or deposit terms', nextSteps:'Recommended next steps',
+  };
+  const fields = Object.entries(preview?.proposal || {}).filter((entry):entry is [string,string] => typeof entry[1] === 'string' && Boolean(entry[1].trim()));
+  const pending = inquiry.pendingClientDisposition;
+  const alreadyReviewed = inquiry.clientDispositionReviewStatus === 'REVIEWED'
+    && inquiry.clientDispositionSource === 'CLIENT_PORTAL' && !inquiry.clientCanRespondToRom;
+  return <section className="space-y-4 rounded-xl border border-blue-200 bg-blue-50 p-5">
+    {preview&&<><header><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold text-blue-950">{preview.label}</h2><p className="mt-1 text-sm text-blue-900">Prepared from your inquiry answers and the proposal details our team added.</p></div>{preview.range&&<span className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-950">Preliminary range: {preview.range}</span>}</div>
+      <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{preview.nonBindingNotice}</p>
+    </header>
+    <div className="grid gap-3 md:grid-cols-2">
+      {preview.sourceAnswers.projectDescription&&<RomText label="Your project" value={preview.sourceAnswers.projectDescription}/>}
+      {preview.sourceAnswers.objectives&&<RomText label="What you want the project to accomplish" value={preview.sourceAnswers.objectives}/>}
+      {preview.sourceAnswers.preliminaryScope&&<RomText label="Initial scope" value={preview.sourceAnswers.preliminaryScope}/>}
+      {preview.sourceAnswers.budgetExpectation&&<RomText label="Budget expectation" value={preview.sourceAnswers.budgetExpectation}/>}
+      {preview.sourceAnswers.desiredTiming&&<RomText label="Desired timing" value={preview.sourceAnswers.desiredTiming}/>}
+      {preview.sourceAnswers.property.address&&<RomText label="Project property" value={[preview.sourceAnswers.property.address,preview.sourceAnswers.property.city,preview.sourceAnswers.property.state,preview.sourceAnswers.property.postalCode].filter(Boolean).join(', ')}/>}
+      {fields.map(([key,value])=><RomText key={key} label={proposalLabels[key]||key} value={value}/>)}
+      {preview.supplementalNarrative&&<RomText label="Additional proposal narrative" value={preview.supplementalNarrative}/>}
+    </div></>}
+    {pending ? <div role="status" className="rounded-lg border border-violet-200 bg-white p-4 text-sm text-violet-950"><p className="font-semibold">Your response is awaiting our team’s review.</p><p className="mt-1">Response: {pending.disposition.replace(/_/g,' ')} · submitted {new Date(pending.submittedAt).toLocaleString()}</p></div>
+      : alreadyReviewed ? <div role="status" className="rounded-lg border border-emerald-200 bg-white p-4 text-sm text-emerald-900"><p className="font-semibold">Your response has been reviewed by our team.</p><p className="mt-1">Recorded response: {inquiry.clientDisposition?.replace(/_/g,' ')||'Reviewed'}.</p></div>
+      : !inquiry.clientCanRespondToRom ? <div role="status" className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">Our team is still preparing the handoff review. You can respond once the current preliminary ROM is ready for client feedback.</div>
+      : <form onSubmit={onSubmit} className="rounded-lg border border-blue-200 bg-white p-4">
+        <h3 className="font-semibold text-gray-950">How would you like to proceed?</h3>
+        <p className="mt-1 text-sm text-gray-600">Your choice is recorded for our team to review. “Proceed to Design” begins design planning only; it is not a construction contract, fixed price, or authorization to build.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {([['PROCEED_TO_DESIGN','Proceed to Design'],['MORE_INFORMATION','I have questions / need more information'],['PAUSE','Pause for now'],['DECLINE','I do not wish to proceed']] as const).map(([value,label])=><label key={value} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${disposition===value?'border-blue-500 bg-blue-50':'border-gray-200'}`}><input type="radio" name="rom-disposition" value={value} checked={disposition===value} onChange={()=>setDisposition(value)} className="mt-0.5"/><span className="font-medium text-gray-900">{label}</span></label>)}
+        </div>
+        <label className="mt-4 block text-sm font-medium text-gray-800">Optional comment<textarea rows={3} value={comment} onChange={(event)=>setComment(event.target.value)} placeholder="Add a question or context for our team." className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"/></label>
+        <div className="mt-4 flex justify-end"><button type="submit" disabled={busy} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy?'Sending…':'Send response for review'}</button></div>
+      </form>}
+  </section>;
+}
+
+function RomText({label,value}:{label:string;value:string}) { return <article className="rounded-lg border border-blue-100 bg-white p-3"><h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</h3><p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{value}</p></article>; }
 
 function Field({label, value, set, required}:{label:string; value:string; set:(value:string)=>void; required?:boolean}) { return <label className="text-sm font-medium text-gray-800">{label}<input required={required} value={value} onChange={(event) => set(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" /></label>; }
 function Area({label, value, set, required}:{label:string; value:string; set:(value:string)=>void; required?:boolean}) { return <label className="text-sm font-medium text-gray-800">{label}<textarea required={required} rows={4} value={value} onChange={(event) => set(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" /></label>; }
