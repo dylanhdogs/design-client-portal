@@ -1071,9 +1071,12 @@ function ClientDispositionReviewPanel({activities,evidenceActivityId,reviewStatu
 
 function LegacyCriterionReviewPanel({inquiry,criteria,saving,onSave}:{inquiry:Inquiry;criteria:ReceptionCriterionReadiness[];saving:boolean;onSave:(criterionId:string,answerState:'CONFIRMED'|'UNKNOWN'|'NOT_APPLICABLE',reason?:string,answerValue?:string)=>void}) {
   const [reasons,setReasons] = useState<Record<string,string>>({});
-  return <section aria-label="Review existing intake answers" className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-    <div><h3 className="font-semibold text-amber-950">Review saved answers</h3><p className="mt-1 text-sm text-amber-900">Legacy values need an explicit check before they count toward phase readiness. Confirm only what still reflects the client’s answer; correct inaccurate values in the inquiry fields first.</p></div>
-    <div className="mt-3 space-y-3">{criteria.map((criterion)=><div key={criterion.id} className="rounded-lg border border-amber-200 bg-white p-3">
+  return <details aria-label="Review existing intake answers" className="group mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50">
+    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl p-4 hover:bg-amber-100/60">
+      <span><span className="block font-semibold text-amber-950">Answer review</span><span className="mt-1 block text-sm text-amber-900">{criteria.length} item{criteria.length===1?'':'s'} need{criteria.length===1?'s':''} attention before phase readiness.</span></span>
+      <ChevronDown className="h-4 w-4 shrink-0 text-amber-800 transition group-open:rotate-180" aria-hidden="true"/>
+    </summary>
+    <div className="space-y-3 border-t border-amber-200 p-4"><p className="text-sm text-amber-900">Review legacy values before they count toward phase readiness. Confirm only what still reflects the client’s answer; correct inaccurate values in the inquiry fields first.</p>{criteria.map((criterion)=><div key={criterion.id} className="rounded-lg border border-amber-200 bg-white p-3">
       <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold text-gray-950">{criterion.label}</p><p className="mt-1 break-words text-sm text-gray-700">{legacyCriterionPreview(inquiry,criterion.id)}</p><p className="mt-1 text-xs text-gray-500">{criterion.answerState==='NEEDS_REVIEW'?'Needs Admin review':'No answer recorded yet'} · {criterion.fieldPaths.join(', ')}</p></div>
         <div className="flex shrink-0 flex-wrap gap-2">{criterion.answerState==='NEEDS_REVIEW'&&(criterion.hasAnswer||(criterion.id==='DESIGN_AGREEMENT'&&inquiry.designAgreementStatus==='NOT_REQUIRED'))&&<button type="button" disabled={saving||(criterion.id==='DESIGN_AGREEMENT'&&!reasons[criterion.id]?.trim())} onClick={()=>onSave(criterion.id,'CONFIRMED',criterion.id==='DESIGN_AGREEMENT'?reasons[criterion.id]:undefined)} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm saved answer</button>}{criterion.answerState==='UNKNOWN'&&criterion.id==='MUST_HAVE_FEATURES'&&<button type="button" disabled={saving} onClick={()=>onSave(criterion.id,'CONFIRMED',undefined,'NONE_IDENTIFIED')} className="rounded-lg border border-blue-300 px-3 py-2 text-xs font-semibold text-blue-800 disabled:opacity-50">None identified</button>}{criterion.answerState==='UNKNOWN'&&criterion.id==='INSPIRATION_STATUS'&&<button type="button" disabled={saving} onClick={()=>onSave(criterion.id,'CONFIRMED',undefined,'NONE_PROVIDED')} className="rounded-lg border border-blue-300 px-3 py-2 text-xs font-semibold text-blue-800 disabled:opacity-50">None provided</button>}</div>
       </div>
@@ -1081,7 +1084,7 @@ function LegacyCriterionReviewPanel({inquiry,criteria,saving,onSave}:{inquiry:In
       {criterion.id==='DESIGN_AGREEMENT'&&inquiry.designAgreementStatus==='NOT_REQUIRED'&&<input aria-label="Admin reason for design agreement not required" value={reasons[criterion.id]||''} onChange={(event)=>setReasons((current)=>({...current,[criterion.id]:event.target.value}))} placeholder="Why is a Design Agreement not required?" className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}
       {criterion.answerState==='NEEDS_REVIEW'&&!criterion.hasAnswer&&!(criterion.id==='DESIGN_AGREEMENT'&&inquiry.designAgreementStatus==='NOT_REQUIRED')&&<p className="mt-2 text-xs text-amber-800">This value is missing or unsupported, so it cannot be confirmed as-is. Update the canonical answer in its section, then save.</p>}
     </div>)}</div>
-  </section>;
+  </details>;
 }
 
 function InquiryPhaseProgress({completions,activePhaseIndex,onOpen}:{completions:Array<{requirements:Array<{label:string;complete:boolean}>;complete:boolean}>;activePhaseIndex:number;onOpen:(tab:TabKey)=>void}) {
