@@ -24,8 +24,10 @@ async function run() {
 
   // Read-only checks run before the user-management migration. Never repair or
   // merge legacy identities automatically; operators must resolve blockers.
+  // Inactive legacy STAFF rows are intentionally retained for historical audit
+  // attribution by the role-consolidation migration.
   const [invalidRoles, duplicateClientAccounts, invalidClientLinks, duplicatePendingInvitations, pendingInvitationAccountConflicts, invalidChecklistCompleters, completedPhasesWithoutDate, auditRows, activityRowsWithResolvableActor] = await Promise.all([
-    count("SELECT COUNT(*) AS count FROM users WHERE role NOT IN ('ADMIN', 'CLIENT')"),
+    count("SELECT COUNT(*) AS count FROM users WHERE role NOT IN ('ADMIN', 'CLIENT') AND NOT (role = 'STAFF' AND active = 0)"),
     count('SELECT COUNT(*) AS count FROM (SELECT client_id FROM users WHERE client_id IS NOT NULL GROUP BY client_id HAVING COUNT(*) > 1)'),
     count("SELECT COUNT(*) AS count FROM users u LEFT JOIN clients c ON c.id = u.client_id WHERE (u.role = 'ADMIN' AND u.client_id IS NOT NULL) OR (u.role = 'CLIENT' AND (u.client_id IS NULL OR c.id IS NULL OR c.deleted_at IS NOT NULL))"),
     count("SELECT COUNT(*) AS count FROM (SELECT lower(email) FROM invitations WHERE status = 'PENDING' AND expires_at > CURRENT_TIMESTAMP GROUP BY lower(email) HAVING COUNT(*) > 1)"),
