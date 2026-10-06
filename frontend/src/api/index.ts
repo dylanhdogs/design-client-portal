@@ -70,11 +70,21 @@ export const authApi = {
   register: (data: { email: string; password: string; name: string; role: string }) =>
     api.post('/auth/register', data),
   me: () => api.get('/auth/me'),
-  getUsers: () => api.get('/auth/users'),
-  resetUserPassword: (userId: string, newPassword: string) =>
-    api.put(`/auth/users/${userId}/password`, { newPassword }),
+  getUsers: (params?: { page?: number; limit?: number; search?: string; role?: string; status?: string; clientId?: string }) =>
+    api.get('/auth/users', { params }),
+   updateUser: (userId: string, data: { name?: string; email?: string; role?: 'ADMIN' | 'CLIENT'; clientId?: string | null }) =>
+    api.patch(`/auth/users/${userId}`, data),
+  updateUserAccessProfile: (userId: string, data: { role: 'ADMIN' | 'CLIENT'; clientId?: string | null }) =>
+    api.put(`/auth/users/${userId}/access-profile`, data),
   updateUserAccess: (userId: string, active: boolean) =>
     api.put(`/auth/users/${userId}/access`, { active }),
+  requestUserPasswordReset: (userId: string) => api.post(`/auth/users/${userId}/password-reset`),
+  getUserActivity: (userId: string, params?: { page?: number; limit?: number }) =>
+    api.get(`/auth/users/${userId}/activity`, { params }),
+  listInvitations: () => api.get('/users/invitations'),
+  inviteUser: (data: { email: string; role: 'ADMIN' | 'CLIENT'; clientId?: string | null }) => api.post('/users/invitations', data),
+  resendInvitation: (id: string) => api.post(`/users/invitations/${id}/resend`),
+  revokeInvitation: (id: string) => api.delete(`/users/invitations/${id}`),
   updateProfile: (data: { name?: string; email?: string; currentPassword?: string; newPassword?: string }) =>
     api.put('/auth/me', data),
   forgotPassword: (email: string) =>
@@ -280,6 +290,8 @@ export const inquiryApi = {
   requestInformation: (id: string, data: { title: string; description?: string; dueAt: string }, expectedIntakeRevision: number) =>
     api.post(`/inquiries/${id}/missing-information`, { ...data, expectedIntakeRevision }),
   activities: (id: string) => api.get(`/inquiries/${id}/activities`),
+  activityHistory: (id: string, params?: { page?: number; limit?: number; actorId?: string; action?: string; from?: string; to?: string }) =>
+    api.get(`/inquiries/${id}/activity`, { params }),
   logActivity: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/activities`, data),
   correctActivity: (id: string, activityId: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/activities/${activityId}/corrections`, data),
   addEvidence: (id: string, data: Record<string, unknown>) => api.post(`/inquiries/${id}/evidence`, data),

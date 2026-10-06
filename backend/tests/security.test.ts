@@ -277,21 +277,33 @@ test('administrator can recover an account without database editing', async () =
   });
   const originalToken = await login('recovery-user@example.com', 'Original-Password-42!');
 
-  const denied = await request(`/api/auth/users/${recoveryUser.id}/password`, {
-    method: 'PUT',
+  const denied = await request(`/api/auth/users/${recoveryUser.id}/password-reset`, {
+    method: 'POST',
     headers: { authorization: `Bearer ${clientToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ newPassword: 'Recovered-Password-43!' }),
   });
   assert.equal(denied.response.status, 403);
 
-  const recovered = await request(`/api/auth/users/${recoveryUser.id}/password`, {
-    method: 'PUT',
+  const resetIssued = await request(`/api/auth/users/${recoveryUser.id}/password-reset`, {
+    method: 'POST',
     headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ newPassword: 'Recovered-Password-43!' }),
+  });
+  assert.equal(resetIssued.response.status, 201);
+  const resetLink = new URL(resetIssued.body.resetLink);
+  const resetToken = resetLink.searchParams.get('token');
+  assert.ok(resetToken);
+  const storedReset = await prisma.user.findUniqueOrThrow({ where: { id: recoveryUser.id }, select: { resetToken: true, resetTokenExpires: true } });
+  assert.notEqual(storedReset.resetToken, resetToken, 'Only a hash of the one-time reset token is stored.');
+  assert.ok(storedReset.resetTokenExpires && storedReset.resetTokenExpires > new Date());
+
+  const recovered = await request('/api/auth/reset-password', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: resetToken, newPassword: 'Recovered-Password-43!' }),
   });
   assert.equal(recovered.response.status, 200);
   const revoked = await request('/api/auth/me', { headers: { authorization: `Bearer ${originalToken}` } });
   assert.equal(revoked.response.status, 401);
+  assert.ok(await prisma.activityLog.count({ where: { userId: recoveryUser.id, action: 'USER_PASSWORD_RESET_COMPLETED' } }));
   const recoveredToken = await login('recovery-user@example.com', 'Recovered-Password-43!');
   assert.ok(recoveredToken);
 

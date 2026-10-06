@@ -25,13 +25,54 @@ const LEGACY_PHASE_NUMBER_BY_STAGE: Record<string, number> = {
 export async function synchronizeLegacyPhases(db: DbClient, projectId: string, completedStage: string, userId: string, at: Date) {
   const names = LEGACY_PHASES_BY_COMPLETED_STAGE[completedStage] || [];
   if (names.length) {
-    const phases = await db.projectPhase.findMany({ where: { projectId, name: { in: names } }, select: { id: true } });
+    const phases = await db.projectPhase.findMany({
+      where: { projectId, name: { in: names } },
+      include: { checklistItems: true },
+    });
     for (const phase of phases) {
-      await db.projectPhase.update({ where: { id: phase.id }, data: { status: 'COMPLETED', completedDate: at } });
-      await db.checklistItem.updateMany({
-        where: { phaseId: phase.id },
-        data: { isCompleted: true, completedAt: at, completedBy: userId, verificationStatus: 'VERIFIED', submittedAt: at, submittedBy: userId, verifiedAt: at, verifiedBy: userId },
-      });
+      if (phase.status !== 'COMPLETED') {
+        const updatedPhase = await db.projectPhase.update({
+          where: { id: phase.id },
+          data: { status: 'COMPLETED', completedDate: at, completedById: userId },
+        });
+        await writeAuditEvent(db, {
+          userId, action: 'PHASE_COMPLETED', entityType: 'ProjectPhase', entityId: phase.id,
+          projectId,
+          before: { status: phase.status, completedDate: phase.completedDate, completedById: phase.completedById },
+          after: { status: updatedPhase.status, completedDate: updatedPhase.completedDate, completedById: updatedPhase.completedById },
+        });
+      }
+
+      for (const item of phase.checklistItems) {
+        const changed = !item.isCompleted || item.verificationStatus !== 'VERIFIED' || !item.submittedAt || !item.verifiedAt;
+        if (!changed) continue;
+        const updatedItem = await db.checklistItem.update({
+          where: { id: item.id },
+          data: {
+            isCompleted: true,
+            completedAt: item.isCompleted ? item.completedAt : at,
+            completedBy: item.isCompleted ? item.completedBy : userId,
+            verificationStatus: 'VERIFIED',
+            submittedAt: item.submittedAt || at,
+            submittedBy: item.submittedBy || userId,
+            verifiedAt: item.verifiedAt || at,
+            verifiedBy: item.verifiedBy || userId,
+          },
+        });
+        await writeAuditEvent(db, {
+          userId,
+          action: item.isCompleted ? 'CHECKLIST_ITEM_VERIFIED' : 'CHECKLIST_ITEM_COMPLETED',
+          entityType: 'ChecklistItem', entityId: item.id, projectId,
+          before: {
+            isCompleted: item.isCompleted, completedAt: item.completedAt, completedBy: item.completedBy,
+            verificationStatus: item.verificationStatus,
+          },
+          after: {
+            isCompleted: updatedItem.isCompleted, completedAt: updatedItem.completedAt, completedBy: updatedItem.completedBy,
+            verificationStatus: updatedItem.verificationStatus,
+          },
+        });
+      }
     }
   }
   const phaseNumber = LEGACY_PHASE_NUMBER_BY_STAGE[completedStage];

@@ -13,7 +13,7 @@ model User {
   passwordHash      String    @map("password_hash")
   role              String    @default("CLIENT")
   name              String
-  clientId          String?   @map("client_id")
+  clientId          String?   @unique(map: "users_client_id_key") @map("client_id")
   resetToken        String?   @unique @map("reset_token")
   resetTokenExpires DateTime? @map("reset_token_expires")
   sessionVersion    Int       @default(0) @map("session_version")
@@ -27,6 +27,9 @@ model User {
   communicationThreads           CommunicationThread[] @relation("CommunicationThreadCreator")
   poolNotes                      PoolNote[]
   activityLogs                   ActivityLog[]
+  sentInvitations                Invitation[]              @relation("InvitationInviter")
+  completedPhases                ProjectPhase[]            @relation("PhaseCompleter")
+  completedChecklistItems        ChecklistItem[]            @relation("ChecklistItemCompleter")
   notifications                  Notification[]
   ownedInquiries                 Inquiry[]               @relation("InquiryOwner")
   ownedStages                    LifecycleStage[]        @relation("StageOwner")
@@ -262,10 +265,12 @@ model ProjectPhase {
   description   String?
   startDate     DateTime? @map("start_date")
   completedDate DateTime? @map("completed_date")
+  completedById String?   @map("completed_by_id")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   project        PoolProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  completedBy    User?           @relation("PhaseCompleter", fields: [completedById], references: [id], onDelete: SetNull)
   checklistItems ChecklistItem[]
 
   @@index([projectId])
@@ -290,6 +295,7 @@ model ChecklistItem {
   createdAt          DateTime  @default(now()) @map("created_at")
 
   phase ProjectPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  completedByUser User? @relation("ChecklistItemCompleter", fields: [completedBy], references: [id], onDelete: SetNull)
 
   @@index([phaseId])
   @@map("checklist_items")
@@ -313,14 +319,18 @@ model PoolNote {
 model Invitation {
   id         String    @id @default(uuid())
   email      String
-  clientId   String    @map("client_id")
-  token      String    @unique
+  clientId   String?   @map("client_id")
+  role       String    @default("CLIENT")
+  invitedById String?  @map("invited_by_id")
+  token      String?   @unique
+  tokenHash  String?   @unique @map("token_hash")
   status     String    @default("PENDING")
   expiresAt  DateTime  @map("expires_at")
   acceptedAt DateTime? @map("accepted_at")
   createdAt  DateTime  @default(now()) @map("created_at")
 
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client    Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: SetNull)
 
   @@index([clientId])
   @@index([token])
@@ -329,21 +339,28 @@ model Invitation {
 
 model ActivityLog {
   id          String   @id @default(uuid())
-  userId      String   @map("user_id")
+  userId      String?  @map("user_id")
   action      String
   entityType  String   @map("entity_type")
   entityId    String   @map("entity_id")
   details     String?
   requestId   String?  @map("request_id")
+  actorName   String?  @map("actor_name")
+  actorRole   String?  @map("actor_role")
+  inquiryId   String?  @map("inquiry_id")
+  projectId   String?  @map("project_id")
   beforeState String?  @map("before_state")
   afterState  String?  @map("after_state")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([inquiryId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([userId, createdAt])
   @@map("activity_logs")
 }
 

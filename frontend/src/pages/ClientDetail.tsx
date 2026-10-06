@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { clientApi, consultationApi, documentApi, communicationApi, poolProjectApi, clientUserApi, phaseApi } from '../api';
+import { clientApi, consultationApi, documentApi, communicationApi, poolProjectApi, phaseApi } from '../api';
 import { Client, Consultation, Communication, ProjectPhase, ChecklistItem } from '../types';
 import { useAuth } from '../context/AuthContext';
-import CreateLoginForm from '../components/CreateLoginForm';
-import InviteClientForm from '../components/InviteClientForm';
 import PhaseProgressBar from '../components/PhaseProgressBar';
 import DocumentUpload from '../components/DocumentUpload';
 import PhaseCompletionCircle from '../components/PhaseCompletionCircle';
@@ -23,9 +21,6 @@ export default function ClientDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'consultations' | 'documents' | 'communications' | 'poolProject'>('consultations');
   const [error, setError] = useState('');
-  const [showCreateLogin, setShowCreateLogin] = useState(false);
-  const [showInviteClient, setShowInviteClient] = useState(false);
-  const [hasLogin, setHasLogin] = useState(false);
 
   // Consultation form
   const [showConsultationForm, setShowConsultationForm] = useState(false);
@@ -76,14 +71,6 @@ export default function ClientDetail() {
       setIsLoading(true);
       const res = await clientApi.getById(id!);
       setClient(res.data);
-      
-      // Check if client has a login account
-      try {
-        const loginRes = await clientUserApi.getLoginInfo(id!);
-        setHasLogin(!!loginRes.data);
-      } catch {
-        setHasLogin(false);
-      }
     } catch (err) {
       console.error(err);
       setError('Failed to load client details.');
@@ -288,23 +275,14 @@ export default function ClientDetail() {
                 <span>Create Pool Project</span>
               </button>
             )}
-            {!hasLogin && (
-              <button
-                onClick={() => setShowCreateLogin(true)}
-                className="flex items-center gap-2 px-3 py-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+            {user?.role === 'ADMIN' && (
+              <Link
+                to={`/users?clientId=${encodeURIComponent(client.id)}`}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-blue-700 transition-colors hover:bg-blue-50"
               >
                 <UserPlus className="h-4 w-4" />
-                <span>Create Client Login</span>
-              </button>
-            )}
-            {!hasLogin && (
-              <button
-                onClick={() => setShowInviteClient(true)}
-                className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span>Invite Client</span>
-              </button>
+                <span>Manage client access</span>
+              </Link>
             )}
             <Link
               to={`/clients/${client.id}/edit`}
@@ -714,7 +692,10 @@ export default function ClientDetail() {
                           <div key={phase.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <PhaseCompletionCircle items={phase.checklistItems} size="sm" />
-                              <span className="text-sm text-gray-700">{phase.displayName}</span>
+                              <div>
+                                <span className="text-sm text-gray-700">{phase.displayName}</span>
+                                {phase.status === 'COMPLETED' && <p className="mt-0.5 text-xs text-gray-500">Completed{phase.completedByUser ? ` by ${phase.completedByUser.name}` : ' · actor not recorded'}{phase.completedDate ? ` · ${new Date(phase.completedDate).toLocaleString()}` : ''}</p>}
+                              </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               {businessDays !== null && (
@@ -785,6 +766,7 @@ export default function ClientDetail() {
                                 <span className={`text-sm ${item.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
                                   {item.description}
                                 </span>
+                                {item.isCompleted && <p className="mt-0.5 text-xs text-gray-500">Completed{item.completedByUser ? ` by ${item.completedByUser.name}` : ' · actor not recorded'}{item.completedAt ? ` · ${new Date(item.completedAt).toLocaleString()}` : ''}</p>}
                                 {item.rejectionReason && (
                                   <p className="mt-1 text-xs text-red-600">Rejection note: {item.rejectionReason}</p>
                                 )}
@@ -827,27 +809,6 @@ export default function ClientDetail() {
         </div>
       </div>
       
-      {/* Create Login Modal */}
-      {showCreateLogin && (
-        <CreateLoginForm
-          clientId={client.id}
-          clientName={client.name}
-          onSuccess={() => {
-            setShowCreateLogin(false);
-            setHasLogin(true);
-            loadClient();
-          }}
-          onCancel={() => setShowCreateLogin(false)}
-        />
-      )}
-
-      {/* Invite Client Modal */}
-      {showInviteClient && (
-        <InviteClientForm
-          clientId={client.id}
-          onCancel={() => setShowInviteClient(false)}
-        />
-      )}
     </div>
   );
 }

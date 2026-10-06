@@ -4,14 +4,15 @@ import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
 import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
 import { approvalLimiter } from '../middleware/rateLimits';
-import { logActivity } from '../utils/activity';
+import { writeAuditEvent } from '../workflow/audit';
 
 const router = express.Router({ mergeParams: true });
 
 const phaseSchema = z.object({
   status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED']),
   startDate: z.string().datetime().optional().or(z.string().min(1).optional()),
-  completedDate: z.string().datetime().optional().or(z.string().min(1).optional())
+  completedDate: z.string().datetime().optional().or(z.string().min(1).optional()),
+  reason: z.string().trim().max(1000).optional(),
 });
 
 const verifyChecklistSchema = z.object({
@@ -65,7 +66,24 @@ router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
       throw new AppError('Pool project not found.', 404);
     }
     
-    res.json(project.phases);
+    const completerIds = Array.from(new Set(project.phases.map((phase) => phase.completedById).filter((id): id is string => Boolean(id))));
+    const completers = completerIds.length
+      ? await prisma.user.findMany({ where: { id: { in: completerIds } }, select: { id: true, name: true } })
+      : [];
+    const completerById = new Map(completers.map((user) => [user.id, user]));
+    const checklistCompleterIds = Array.from(new Set(project.phases.flatMap((phase) => phase.checklistItems.map((item) => item.completedBy).filter((id): id is string => Boolean(id)))));
+    const checklistCompleters = checklistCompleterIds.length
+      ? await prisma.user.findMany({ where: { id: { in: checklistCompleterIds } }, select: { id: true, name: true } })
+      : [];
+    const checklistCompleterById = new Map(checklistCompleters.map((user) => [user.id, user]));
+    res.json(project.phases.map((phase) => ({
+      ...phase,
+      completedByUser: phase.completedById ? completerById.get(phase.completedById) || null : null,
+      checklistItems: phase.checklistItems.map((item) => ({
+        ...item,
+        completedByUser: item.completedBy ? checklistCompleterById.get(item.completedBy) || null : null,
+      })),
+    })));
   } catch (err) {
     next(err);
   }
@@ -88,11 +106,27 @@ router.put('/:phaseId', authenticate, authorize('ADMIN'), approvalLimiter, async
     
     const existingPhase = await prisma.projectPhase.findFirst({
       where: { id: phaseId, projectId: project.id },
-      include: { checklistItems: { orderBy: { order: 'asc' } } },
+      include: {
+        checklistItems: { orderBy: { order: 'asc' } },
+        completedBy: { select: { id: true, name: true } },
+      },
     });
 
     if (!existingPhase) {
       throw new AppError('Phase not found for this project.', 404);
+    }
+
+    if (existingPhase.status === 'COMPLETED' && data.status !== 'COMPLETED' && !data.reason?.trim()) {
+      throw new AppError('A reason is required to reopen a completed phase.', 400, 'VALIDATION_ERROR');
+    }
+
+    const requestedStartDate = data.startDate ? new Date(data.startDate) : undefined;
+    const sameStartDate = requestedStartDate
+      ? existingPhase.startDate?.getTime() === requestedStartDate.getTime()
+      : data.status !== 'IN_PROGRESS' || Boolean(existingPhase.startDate);
+    if (existingPhase.status === data.status && sameStartDate) {
+      const { completedBy, ...unchanged } = existingPhase;
+      return res.json({ ...unchanged, completedByUser: completedBy });
     }
 
     if (data.status === 'COMPLETED') {
@@ -120,10 +154,16 @@ router.put('/:phaseId', authenticate, authorize('ADMIN'), approvalLimiter, async
               ? new Date()
               : undefined,
           completedDate: data.status === 'COMPLETED'
-            ? (data.completedDate ? new Date(data.completedDate) : new Date())
+            ? (existingPhase.status === 'COMPLETED' ? existingPhase.completedDate : new Date())
+            : null,
+          completedById: data.status === 'COMPLETED'
+            ? (existingPhase.status === 'COMPLETED' ? existingPhase.completedById : (req as any).user.id)
             : null,
         },
-        include: { checklistItems: { orderBy: { order: 'asc' } } },
+        include: {
+          checklistItems: { orderBy: { order: 'asc' } },
+          completedBy: { select: { id: true, name: true } },
+        },
       });
 
       if (data.status === 'COMPLETED') {
@@ -148,15 +188,33 @@ router.put('/:phaseId', authenticate, authorize('ADMIN'), approvalLimiter, async
             status: nextPhase?.name || 'COMPLETED',
           },
         });
+        if (nextPhase && nextPhase.status !== 'IN_PROGRESS') {
+          await writeAuditEvent(tx, {
+            userId: (req as any).user.id, action: 'PHASE_STARTED', entityType: 'ProjectPhase', entityId: nextPhase.id,
+            projectId: project.id, requestId: (req as any).requestId,
+            before: { status: nextPhase.status }, after: { status: 'IN_PROGRESS' },
+          });
+        }
       }
 
-      return updated;
-    });
+      const wasCompleted = existingPhase.status === 'COMPLETED';
+      const isCompleted = data.status === 'COMPLETED';
+      await writeAuditEvent(tx, {
+        userId: (req as any).user.id,
+        action: !wasCompleted && isCompleted
+          ? 'PHASE_COMPLETED'
+          : wasCompleted && !isCompleted
+            ? 'PHASE_REOPENED'
+            : existingPhase.status !== 'IN_PROGRESS' && updated.status === 'IN_PROGRESS'
+              ? 'PHASE_STARTED'
+              : 'PHASE_UPDATED',
+        entityType: 'ProjectPhase', entityId: updated.id, projectId: project.id, requestId: (req as any).requestId,
+        details: wasCompleted && !isCompleted ? { reason: data.reason } : undefined,
+        before: { status: existingPhase.status, completedDate: existingPhase.completedDate, completedById: existingPhase.completedById },
+        after: { status: updated.status, completedDate: updated.completedDate, completedById: updated.completedById },
+      });
 
-    await logActivity((req as any).user.id, 'UPDATE', 'ProjectPhase', phase.id, {
-      previousStatus: existingPhase.status,
-      status: phase.status,
-      projectId: project.id,
+      return { ...updated, completedByUser: updated.completedBy };
     });
 
     res.json(phase);
@@ -171,7 +229,7 @@ router.put('/:phaseId/checklist/:itemId', authenticate, authorize('ADMIN'), appr
     const { clientId, phaseId, itemId } = req.params;
     const userId = (req as any).user.id;
     
-    const { isCompleted } = z.object({ isCompleted: z.boolean() }).parse(req.body);
+    const { isCompleted, reason } = z.object({ isCompleted: z.boolean(), reason: z.string().trim().max(1000).optional() }).strict().parse(req.body);
     
     const project = await prisma.poolProject.findUnique({
       where: { clientId }
@@ -191,24 +249,31 @@ router.put('/:phaseId/checklist/:itemId', authenticate, authorize('ADMIN'), appr
       where: { id: itemId, phaseId: phase.id },
     });
     if (!existingItem) throw new AppError('Checklist item not found for this phase.', 404);
+    if (existingItem.isCompleted === isCompleted) return res.json(existingItem);
+    if (existingItem.isCompleted && !isCompleted && !reason?.trim()) throw new AppError('A reason is required to reopen a completed checklist item.', 400, 'VALIDATION_ERROR');
 
-    const item = await prisma.checklistItem.update({
-      where: { id: existingItem.id },
-      data: {
-        isCompleted: !!isCompleted,
-        completedAt: isCompleted ? new Date() : null,
-        completedBy: isCompleted ? userId : null,
-        verificationStatus: isCompleted ? 'APPROVED' : 'NOT_SUBMITTED',
-        verifiedAt: isCompleted ? new Date() : null,
-        verifiedBy: isCompleted ? userId : null,
-        rejectionReason: null
-      }
-    });
-
-    await logActivity(userId, 'UPDATE', 'ChecklistItem', item.id, {
-      phaseId,
-      projectId: project.id,
-      isCompleted,
+    const item = await prisma.$transaction(async (tx) => {
+      const timestamp = new Date();
+      const updated = await tx.checklistItem.update({
+        where: { id: existingItem.id },
+        data: {
+          isCompleted,
+          completedAt: isCompleted ? timestamp : null,
+          completedBy: isCompleted ? userId : null,
+          verificationStatus: isCompleted ? 'APPROVED' : 'NOT_SUBMITTED',
+          verifiedAt: isCompleted ? timestamp : null,
+          verifiedBy: isCompleted ? userId : null,
+          rejectionReason: null,
+        },
+      });
+      await writeAuditEvent(tx, {
+        userId, action: isCompleted ? 'CHECKLIST_ITEM_COMPLETED' : 'CHECKLIST_ITEM_REOPENED',
+        entityType: 'ChecklistItem', entityId: updated.id, projectId: project.id, requestId: (req as any).requestId,
+        details: !isCompleted ? { reason } : undefined,
+        before: { isCompleted: existingItem.isCompleted, completedAt: existingItem.completedAt, completedBy: existingItem.completedBy },
+        after: { isCompleted: updated.isCompleted, completedAt: updated.completedAt, completedBy: updated.completedBy },
+      });
+      return updated;
     });
     
     res.json(item);
@@ -244,19 +309,22 @@ router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnCli
       throw new AppError('Checklist item is already approved.', 409);
     }
 
-    const item = await prisma.checklistItem.update({
-      where: { id: itemId },
-      data: {
-        verificationStatus: 'SUBMITTED',
-        submittedAt: new Date(),
-        submittedBy: userId,
-        verifiedAt: null,
-        verifiedBy: null,
-        rejectionReason: null,
-        isCompleted: false,
-        completedAt: null,
-        completedBy: null
-      }
+    const item = await prisma.$transaction(async (tx) => {
+      const updated = await tx.checklistItem.update({
+        where: { id: itemId },
+        data: {
+          verificationStatus: 'SUBMITTED', submittedAt: new Date(), submittedBy: userId,
+          verifiedAt: null, verifiedBy: null, rejectionReason: null,
+          isCompleted: false, completedAt: null, completedBy: null,
+        },
+      });
+      await writeAuditEvent(tx, {
+        userId, action: 'CHECKLIST_ITEM_SUBMITTED', entityType: 'ChecklistItem', entityId: updated.id,
+        projectId: project.id, requestId: (req as any).requestId,
+        before: { verificationStatus: existing.verificationStatus, isCompleted: existing.isCompleted },
+        after: { verificationStatus: updated.verificationStatus, isCompleted: updated.isCompleted },
+      });
+      return updated;
     });
 
     const reviewers = await prisma.user.findMany({
@@ -272,8 +340,6 @@ router.post('/:phaseId/checklist/:itemId/submit', authenticate, restrictToOwnCli
       phaseId,
       itemId
     });
-
-    await logActivity(userId, 'SUBMIT', 'ChecklistItem', item.id, { phaseId, projectId: project.id });
 
     res.json(item);
   } catch (err) {
@@ -309,9 +375,10 @@ router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'
       throw new AppError('Only submitted checklist items can be verified.', 409, 'INVALID_TRANSITION');
     }
 
-    const item = await prisma.checklistItem.update({
-      where: { id: itemId },
-      data: data.approved
+    const item = await prisma.$transaction(async (tx) => {
+      const updated = await tx.checklistItem.update({
+        where: { id: itemId },
+        data: data.approved
         ? {
             verificationStatus: 'APPROVED',
             isCompleted: true,
@@ -329,7 +396,16 @@ router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'
             verifiedAt: new Date(),
             verifiedBy: userId,
             rejectionReason: data.rejectionReason || 'Not approved. Please revisit and resubmit.'
-          }
+        },
+      });
+      await writeAuditEvent(tx, {
+        userId, action: data.approved ? 'CHECKLIST_ITEM_COMPLETED' : 'CHECKLIST_ITEM_REJECTED',
+        entityType: 'ChecklistItem', entityId: updated.id, projectId: project.id, requestId: (req as any).requestId,
+        details: data.approved ? undefined : { rejectionReason: updated.rejectionReason },
+        before: { verificationStatus: existing.verificationStatus, isCompleted: existing.isCompleted },
+        after: { verificationStatus: updated.verificationStatus, isCompleted: updated.isCompleted, completedAt: updated.completedAt, completedBy: updated.completedBy },
+      });
+      return updated;
     });
 
     const clientUsers = project.client.users.filter((user) => user.role === 'CLIENT');
@@ -341,13 +417,6 @@ router.put('/:phaseId/checklist/:itemId/verify', authenticate, authorize('ADMIN'
       clientId,
       phaseId,
       itemId
-    });
-
-    await logActivity(userId, 'VERIFY', 'ChecklistItem', item.id, {
-      phaseId,
-      projectId: project.id,
-      approved: data.approved,
-      rejectionReason: item.rejectionReason,
     });
 
     res.json(item);

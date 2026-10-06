@@ -25,6 +25,7 @@ import PreconstructionWorkspace from './pages/PreconstructionWorkspace';
 import ProcurementWorkspace from './pages/ProcurementWorkspace';
 import ManagementDashboard from './pages/ManagementDashboard';
 import ClientStatusReportPage from './pages/ClientStatusReport';
+import UsersPage from './pages/Users';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -91,6 +92,7 @@ function App() {
             <Route path="clients/:id" element={<RoleRoute roles={['ADMIN']}><ClientDetail /></RoleRoute>} />
             <Route path="clients/:id/edit" element={<RoleRoute roles={['ADMIN']}><ClientForm /></RoleRoute>} />
             <Route path="clients/:id/status-report" element={<RoleRoute roles={['ADMIN']}><ClientStatusReportPage /></RoleRoute>} />
+            <Route path="users" element={<RoleRoute roles={['ADMIN']}><UsersPage /></RoleRoute>} />
             <Route path="inquiries" element={<RoleRoute roles={['ADMIN']}><Inquiries /></RoleRoute>} />
             <Route path="management" element={<RoleRoute roles={['ADMIN']}><ManagementDashboard /></RoleRoute>} />
             <Route path="projects/:projectId" element={<RoleRoute roles={['ADMIN']}><ProjectCommandCenter /></RoleRoute>} />

@@ -706,6 +706,8 @@ export interface ProjectPhase {
   description: string | null;
   startDate: string | null;
   completedDate: string | null;
+  completedById?: string | null;
+  completedByUser?: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
   checklistItems?: ChecklistItem[];
@@ -718,6 +720,7 @@ export interface ChecklistItem {
   isCompleted: boolean;
   completedAt: string | null;
   completedBy: string | null;
+  completedByUser?: { id: string; name: string } | null;
   verificationStatus: 'NOT_SUBMITTED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   submittedAt: string | null;
   submittedBy: string | null;

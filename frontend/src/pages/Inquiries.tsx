@@ -154,10 +154,44 @@ function legacyCriterionPreview(inquiry: Inquiry, criterionId: string): string {
   if (!summary) return 'No saved answer is available in the inquiry fields.';
   return summary.length > 240 ? `${summary.slice(0, 237)}…` : summary;
 }
-type TabKey = 'INTAKE' | 'QUESTIONS' | 'SCHEDULE' | 'FILES' | 'HANDOFF';
+type TabKey = 'INTAKE' | 'QUESTIONS' | 'SCHEDULE' | 'FILES' | 'HANDOFF' | 'HISTORY';
 type DiscoverySubTab = 'QUESTIONS' | 'COMMUNITY' | 'CALL_TRACKER';
 type RomProposalField = 'projectNarrative' | 'designBuildOverview' | 'proposedScope' | 'exclusions' | 'designDeliverables' | 'clientResponsibilities' | 'milestones' | 'allowancesOptions' | 'assumptions' | 'depositTerms' | 'nextSteps';
 type RomProposalOverrides = Record<RomProposalField, string | null>;
+
+function InquiryAuditTab({ inquiryId }: { inquiryId: string }) {
+  const [events, setEvents] = useState<Array<{ id: string; action: string; entityType: string; entityId: string; actorName: string; actorRole: string; details: unknown; before: unknown; after: unknown; createdAt: string }>>([]);
+  const [actors, setActors] = useState<User[]>([]);
+  const [page, setPage] = useState(1); const [totalPages, setTotalPages] = useState(1); const [actorId, setActorId] = useState(''); const [action, setAction] = useState(''); const [from, setFrom] = useState(''); const [to, setTo] = useState('');
+  const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  useEffect(() => { authApi.getUsers({ page: 1, limit: 100 }).then((result) => setActors(result.data.data || result.data)).catch(() => setActors([])); }, []);
+  useEffect(() => {
+    let active = true; setLoading(true); setError('');
+    const toIso = (value: string) => value ? new Date(value).toISOString() : undefined;
+    inquiryApi.activityHistory(inquiryId, { page, limit: 20, actorId: actorId || undefined, action: action || undefined, from: toIso(from), to: toIso(to) })
+      .then((result) => { if (active) { setEvents(result.data.data); setTotalPages(Math.max(1, result.data.pagination.totalPages)); } })
+      .catch((err) => { if (active) setError(getApiErrorMessage(err, 'Inquiry history could not be loaded.')); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [inquiryId, page, actorId, action, from, to]);
+  const actions = Array.from(new Set(events.map((event) => event.action)));
+  return <section className="space-y-4" aria-label="Inquiry change history">
+    <div><h3 className="font-semibold text-gray-900">Inquiry change history</h3><p className="mt-1 text-sm text-gray-600">Internal audit trail of saved changes. Contact calls and emails remain in Files & conversation.</p></div>
+    <div className="grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2 lg:grid-cols-4">
+      <label className="text-xs font-medium text-gray-700">Changed by<select value={actorId} onChange={(event) => { setPage(1); setActorId(event.target.value); }} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm"><option value="">Anyone</option>{actors.map((actor) => <option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></label>
+      <label className="text-xs font-medium text-gray-700">Change type<select value={action} onChange={(event) => { setPage(1); setAction(event.target.value); }} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm"><option value="">All changes</option>{actions.map((value) => <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>)}</select></label>
+      <label className="text-xs font-medium text-gray-700">From<input type="datetime-local" value={from} onChange={(event) => { setPage(1); setFrom(event.target.value); }} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm" /></label>
+      <label className="text-xs font-medium text-gray-700">Through<input type="datetime-local" value={to} onChange={(event) => { setPage(1); setTo(event.target.value); }} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm" /></label>
+    </div>
+    {error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p> : loading ? <p className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">Loading history…</p> : events.length === 0 ? <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">No changes match these filters.</p> : <ol className="divide-y rounded-lg border border-gray-200 bg-white">{events.map((event) => <li key={event.id} className="p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-medium text-gray-900">{event.action.replace(/_/g, ' ')}</p><p className="mt-1 text-xs text-gray-600">{event.actorName} · {event.actorRole} · {event.entityType}</p></div><time className="text-xs text-gray-500" title="Displayed in your local timezone">{new Date(event.createdAt).toLocaleString()}</time></div>
+      {event.details != null && <p className="mt-2 text-sm text-gray-700">{Array.isArray((event.details as any).changes) ? `${(event.details as any).changes.length} field(s) changed` : typeof (event.details as any).reason === 'string' ? `Reason: ${(event.details as any).reason}` : 'Additional event details'}</p>}
+      {(event.details != null || event.before != null || event.after != null) && <details className="mt-2"><summary className="cursor-pointer text-xs font-medium text-blue-700">View recorded details</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-gray-50 p-3 text-xs text-gray-600">{JSON.stringify({ details: event.details, before: event.before, after: event.after }, null, 2)}</pre></details>}
+    </li>)}</ol>}
+    <div className="flex items-center justify-between text-sm"><span className="text-gray-500">Page {page} of {totalPages}</span><div className="flex gap-2"><button disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)} className="rounded-md border px-3 py-1.5 disabled:opacity-40">Previous</button><button disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)} className="rounded-md border px-3 py-1.5 disabled:opacity-40">Next</button></div></div>
+  </section>;
+}
+
 const romProposalFieldDefinitions: Array<{key:RomProposalField;label:string;description:string}> = [
   {key:'projectNarrative',label:'Project narrative',description:'The story of the project, its goals, and the client’s intended use.'},
   {key:'designBuildOverview',label:'Design & build overview',description:'High-level approach and how the requested work fits together.'},
@@ -316,6 +350,8 @@ export default function Inquiries() {
   const [filter,setFilter] = useState('');
   const [queue,setQueue] = useState('ACTIVE');
   const [activeTab,setActiveTab] = useState<TabKey>('INTAKE');
+  const [pendingRequirementJump,setPendingRequirementJump] = useState<{criterionId:string;tab:TabKey;sectionId:string;focusId:string}|null>(null);
+  const [highlightedRequirementId,setHighlightedRequirementId] = useState('');
   const [discoverySubTab,setDiscoverySubTab] = useState<DiscoverySubTab>('QUESTIONS');
   const [showCreate,setShowCreate] = useState(false);
   const [saving,setSaving] = useState(false);
@@ -399,6 +435,20 @@ export default function Inquiries() {
     localStorage.setItem('reception.ownerScope', ownerScope);
     localStorage.setItem('reception.overdueOnly', String(overdueOnly));
   }, [search, ownerScope, overdueOnly]);
+  useEffect(() => {
+    if (!pendingRequirementJump || activeTab !== pendingRequirementJump.tab) return;
+    const section = document.getElementById(pendingRequirementJump.sectionId);
+    const focusTarget = document.getElementById(pendingRequirementJump.focusId);
+    if (!section) { setPendingRequirementJump(null); return; }
+    section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (focusTarget instanceof HTMLElement) focusTarget.focus({ preventScroll: true });
+    setPendingRequirementJump(null);
+  }, [activeTab, pendingRequirementJump]);
+  useEffect(() => {
+    if (!highlightedRequirementId) return;
+    const timeout = window.setTimeout(() => setHighlightedRequirementId(''), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [highlightedRequirementId]);
 
   const visibleItems = useMemo(() => items.filter((item) => {
     if (filter) return true;
@@ -427,6 +477,20 @@ export default function Inquiries() {
   const phaseUnlocked = (phaseIndex:number) => phaseIndex === 0
     || selectedPhaseCompletions.slice(0, phaseIndex).every((phase) => phase.complete)
     || (phaseIndex === 2 && phaseOneComplete && canScheduleSiteMeetingEarly);
+  const canJumpToRequirement = (criterionId:string) =>
+    (criterionId === 'QUALIFICATION_APPROVAL' && currentUser?.role === 'ADMIN')
+    || (criterionId === 'SITE_MEETING_SCHEDULED' && phaseUnlocked(2));
+  const jumpToRequirement = (criterionId:string) => {
+    const target = criterionId === 'QUALIFICATION_APPROVAL'
+      ? { tab: 'INTAKE' as const, sectionId: 'qualification-review', focusId: 'qualification-review' }
+      : criterionId === 'SITE_MEETING_SCHEDULED'
+        ? { tab: 'SCHEDULE' as const, sectionId: 'site-meeting-scheduled', focusId: 'site-meeting-date' }
+        : null;
+    if (!target || !canJumpToRequirement(criterionId)) return;
+    setHighlightedRequirementId(criterionId);
+    setPendingRequirementJump({ criterionId, ...target });
+    setActiveTab(target.tab);
+  };
   const phaseTwoComplete = selected?.readiness
     ? phaseTwoBlockers.every((criterion) => criterion.id === 'QUALIFICATION_APPROVAL')
     : Boolean(selectedPhaseCompletions[1]?.complete);
@@ -837,16 +901,16 @@ export default function Inquiries() {
     </section>
 
       {selected&&<FormModal open={showRecord} title={selected.client.name} description={selected.property?`${selected.property.address}, ${selected.property.city||''} ${selected.property.state||''}`:'Property information needed'} showSubmit={false} cancelLabel="Close" maxWidthClass="max-w-5xl" onClose={()=>setShowRecord(false)}>
-        <InquiryPhaseProgress completions={selectedPhaseCompletions} activePhaseIndex={selectedPhaseCompletions.findIndex((phase) => !phase.complete) < 0 ? inquiryPhaseDefinitions.length - 1 : Math.max(0, selectedPhaseCompletions.findIndex((phase) => !phase.complete))} onOpen={(tab)=>{setActiveTab(tab);if(tab==='QUESTIONS')setDiscoverySubTab('QUESTIONS');}} />
+        <InquiryPhaseProgress completions={selectedPhaseCompletions} activePhaseIndex={selectedPhaseCompletions.findIndex((phase) => !phase.complete) < 0 ? inquiryPhaseDefinitions.length - 1 : Math.max(0, selectedPhaseCompletions.findIndex((phase) => !phase.complete))} onOpen={(tab)=>{setActiveTab(tab);if(tab==='QUESTIONS')setDiscoverySubTab('QUESTIONS');}} canJump={canJumpToRequirement} onJump={jumpToRequirement} />
         {currentUser?.role==='ADMIN'&&['NEW','IN_REVIEW','QUALIFIED'].includes(selected.qualificationStatus)&&criteriaForAdminReview.length>0&&<LegacyCriterionReviewPanel inquiry={selected} criteria={criteriaForAdminReview} saving={saving} onSave={saveCriterionReview}/>}
-        <nav aria-label="Intake record sections" className="flex items-center overflow-x-auto border-b border-gray-200 px-3"><TabButton disabled={!phaseUnlocked(0)} active={activeTab==='INTAKE'} onClick={()=>setActiveTab('INTAKE')} icon={<UserRound className="h-4 w-4"/>} label="Intake"/><TabButton disabled={!phaseUnlocked(1)} active={activeTab==='QUESTIONS'} onClick={()=>{setDiscoverySubTab('QUESTIONS');setActiveTab('QUESTIONS');}} icon={<ClipboardList className="h-4 w-4"/>} label={`Pre-design discovery${selectedDiscoveryProgress.percent===100?' ✓':''}${discoverySaveState==='saved'?' · Saved':''}`}/><TabButton disabled={!phaseUnlocked(2)} active={activeTab==='SCHEDULE'} onClick={()=>setActiveTab('SCHEDULE')} icon={<Clock3 className="h-4 w-4"/>} label="Site Meetings"/><TabButton active={activeTab==='FILES'} onClick={()=>setActiveTab('FILES')} icon={<FileText className="h-4 w-4"/>} label="Files"/><TabButton disabled={!phaseUnlocked(3)} active={activeTab==='HANDOFF'} onClick={()=>setActiveTab('HANDOFF')} icon={<ClipboardCheck className="h-4 w-4"/>} label="Handoff"/><button type="button" onClick={downloadInquiryPdf} disabled={exportingInquiry} className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"><Download className="h-4 w-4"/>{exportingInquiry?'Preparing report…':'Download inquiry report'}</button></nav>
+        <nav aria-label="Intake record sections" className="flex items-center overflow-x-auto border-b border-gray-200 px-3"><TabButton disabled={!phaseUnlocked(0)} active={activeTab==='INTAKE'} onClick={()=>setActiveTab('INTAKE')} icon={<UserRound className="h-4 w-4"/>} label="Intake"/><TabButton disabled={!phaseUnlocked(1)} active={activeTab==='QUESTIONS'} onClick={()=>{setDiscoverySubTab('QUESTIONS');setActiveTab('QUESTIONS');}} icon={<ClipboardList className="h-4 w-4"/>} label={`Pre-design discovery${selectedDiscoveryProgress.percent===100?' ✓':''}${discoverySaveState==='saved'?' · Saved':''}`}/><TabButton disabled={!phaseUnlocked(2)} active={activeTab==='SCHEDULE'} onClick={()=>setActiveTab('SCHEDULE')} icon={<Clock3 className="h-4 w-4"/>} label="Site Meetings"/><TabButton active={activeTab==='FILES'} onClick={()=>setActiveTab('FILES')} icon={<FileText className="h-4 w-4"/>} label="Files"/><TabButton disabled={!phaseUnlocked(3)} active={activeTab==='HANDOFF'} onClick={()=>setActiveTab('HANDOFF')} icon={<ClipboardCheck className="h-4 w-4"/>} label="Handoff"/>{currentUser?.role==='ADMIN'&&<TabButton active={activeTab==='HISTORY'} onClick={()=>setActiveTab('HISTORY')} icon={<Clock3 className="h-4 w-4"/>} label="History"/>}<button type="button" onClick={downloadInquiryPdf} disabled={exportingInquiry} className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"><Download className="h-4 w-4"/>{exportingInquiry?'Preparing report…':'Download inquiry report'}</button></nav>
         <div className="inquiry-form-shell p-5">
           {activeTab==='HANDOFF'&&<div className="mb-4 flex flex-wrap justify-end gap-2"><button type="button" onClick={()=>setShowRomEditor(true)} className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"><FileText className="h-4 w-4"/>Edit ROM proposal</button><button type="button" onClick={()=>setShowRomPreview(true)} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"><FileText className="h-4 w-4"/>Preview ROM proposal</button></div>}
            {activeTab==='INTAKE'&&<div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Project information</h3><p className="mt-1 text-sm text-gray-600">Capture facts once and build on this record through Design.</p></div><button onClick={()=>{setShowRecord(false);setShowEdit(true);}} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:border-blue-500 hover:text-blue-700">Edit intake</button></div>
             <div className="grid gap-4 sm:grid-cols-2"><Detail label="Client email" value={selected.client.email}/><Detail label="Project description" value={selected.description}/><Detail label="Objectives" value={selected.objectives}/><Detail label="Preliminary scope" value={selected.preliminaryScope}/><Detail label="Budget expectation" value={selected.budgetExpectation} preliminary/><Detail label="Desired timing" value={selected.desiredTiming} preliminary/><Detail label="Source / referral" value={selected.source}/><Detail label="Reception owner" value={selected.owner?.name}/></div>
             {!selected.ownerId&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="mb-3 text-sm font-semibold text-amber-950">This inquiry needs an owner and next action.</p><Select label="Assign reception owner" value="" set={(ownerId)=>ownerId&&mutate(()=>inquiryApi.update(selected.id,{ownerId,nextAction:selected.nextAction||'Complete qualification review',nextActionDueAt:new Date(Date.now()+86400000).toISOString()},selected.intakeRevision))} options={users.map((user)=>({value:user.id,label:user.name}))}/></div>}
-            {['NEW','IN_REVIEW'].includes(selected.qualificationStatus)&&<section className="rounded-xl border border-blue-200 bg-blue-50 p-4"><div><h3 className="font-semibold text-blue-950">Qualification review</h3><p className="mt-1 text-sm text-blue-900">These Admin decisions stay in Intake so you can complete qualification before Handoff unlocks.</p></div><div className="mt-3 flex flex-wrap gap-3">{selected.qualificationStatus==='NEW'&&<button disabled={saving||!phaseOneComplete} title={!phaseOneComplete?'Complete every Phase 1 requirement first.':undefined} onClick={()=>changeStatus('IN_REVIEW')} className="rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-950 disabled:cursor-not-allowed disabled:opacity-50">Begin qualification review</button>}{selected.qualificationStatus==='IN_REVIEW'&&<button disabled={saving||!phaseTwoComplete} title={!phaseTwoComplete?'Complete all other Pre-design Discovery requirements first.':undefined} onClick={()=>changeStatus('QUALIFIED')} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Mark qualified</button>}</div></section>}
+            {['NEW','IN_REVIEW'].includes(selected.qualificationStatus)&&<section id="qualification-review" tabIndex={-1} className={`rounded-xl border border-blue-200 bg-blue-50 p-4 transition-shadow ${highlightedRequirementId==='QUALIFICATION_APPROVAL'?'ring-4 ring-amber-300 ring-offset-2':''}`}><div><h3 className="font-semibold text-blue-950">Qualification review</h3><p className="mt-1 text-sm font-semibold text-blue-900">Process incomplete.</p><p className="mt-1 text-sm text-blue-900">This file contains outstanding selections and must be completed to move forward</p></div><div className="mt-3 flex flex-wrap gap-3">{selected.qualificationStatus==='NEW'&&<button disabled={saving||!phaseOneComplete} title={!phaseOneComplete?'Complete every Phase 1 requirement first.':undefined} onClick={()=>changeStatus('IN_REVIEW')} className="rounded-lg bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-950 disabled:cursor-not-allowed disabled:opacity-50">Begin qualification review</button>}{selected.qualificationStatus==='IN_REVIEW'&&<button disabled={saving||!phaseTwoComplete} title={!phaseTwoComplete?'Complete all other Pre-design Discovery requirements first.':undefined} onClick={()=>changeStatus('QUALIFIED')} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Mark qualified</button>}</div></section>}
           </div>}
 
            {activeTab==='QUESTIONS'&&<form noValidate onSubmit={saveDiscovery} className="space-y-6">
@@ -931,7 +995,7 @@ export default function Inquiries() {
           </form>}
 
            {activeTab==='SCHEDULE'&&<div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><p className="font-semibold text-blue-950">Site meetings happen after discovery</p><p className="mt-1 text-sm text-blue-800">This phase is only for in-person site meetings after the potential client has completed the pre-design conversation. Phone calls are scheduled and recorded in Pre-design discovery.</p></div>}
-          {activeTab==='SCHEDULE'&&<section className="space-y-4 rounded-xl border border-gray-200 bg-white p-4" aria-label="Schedule a site meeting">
+          {activeTab==='SCHEDULE'&&<section id="site-meeting-scheduled" tabIndex={-1} className={`space-y-4 rounded-xl border border-gray-200 bg-white p-4 transition-shadow ${highlightedRequirementId==='SITE_MEETING_SCHEDULED'?'ring-4 ring-amber-300 ring-offset-2':''}`} aria-label="Schedule a site meeting">
             <div>
               <h3 className="font-semibold text-gray-950">Schedule a site meeting</h3>
               <p className="mt-1 text-sm text-gray-600">Choose one start time. End time and follow-up are optional details for that same meeting.</p>
@@ -939,7 +1003,7 @@ export default function Inquiries() {
             <div className="grid items-start gap-4 sm:grid-cols-2">
               <label className="text-sm font-medium text-gray-800">Subject or request<input value={activitySubject} onChange={(event)=>setActivitySubject(event.target.value)} placeholder="Example: Confirm HOA pool barrier requirements" className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>
               <label className="text-sm font-medium text-gray-800">Participants<input value={activityParticipants} onChange={(event)=>setActivityParticipants(event.target.value)} placeholder="Names or email addresses, separated by commas" className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>
-              <label className="text-sm font-medium text-gray-800">Meeting start date and time<input type="datetime-local" required value={siteMeetingDate} onChange={(event)=>setSiteMeetingDate(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>
+              <label className="text-sm font-medium text-gray-800">Meeting start date and time<input id="site-meeting-date" type="datetime-local" required value={siteMeetingDate} onChange={(event)=>setSiteMeetingDate(event.target.value)} className={`mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 transition-shadow ${highlightedRequirementId==='SITE_MEETING_SCHEDULED'?'ring-4 ring-amber-300 ring-offset-2':''}`}/></label>
               <label className="text-sm font-medium text-gray-800">Meeting end date and time (optional)<input type="datetime-local" value={activityEndAt} onChange={(event)=>setActivityEndAt(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>
               <Field label="Next action" value={activityNextAction} set={setActivityNextAction}/>
               <label className="text-sm font-medium text-gray-800">Follow-up due (optional)<input type="datetime-local" value={activityNextActionDueAt} onChange={(event)=>setActivityNextActionDueAt(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2"/></label>
@@ -989,6 +1053,7 @@ export default function Inquiries() {
             <div className="flex flex-wrap gap-3 border-t border-gray-200 pt-5">{selected.qualificationStatus==='QUALIFIED'&&!showHandoffConfirm&&<button disabled={saving||!handoffReviewCurrent} title={!handoffReviewCurrent?'Save the current ROM and pass a revision-bound handoff review first.':undefined} onClick={()=>setShowHandoffConfirm(true)} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Approve handoff & create Design project</button>}{selected.projectId&&<Link to={'/projects/'+selected.projectId} className="rounded-lg border border-violet-300 px-4 py-2 text-sm font-semibold text-violet-700">Open Design project <ArrowRight className="ml-1 inline h-4 w-4"/></Link>}</div>
             <div className="rounded-lg border border-gray-200"><button onClick={()=>setShowMore(!showMore)} className="flex w-full items-center justify-between p-4 text-left text-sm font-semibold"><span>More intake actions</span><ChevronDown className={`h-4 w-4 transition ${showMore?'rotate-180':''}`}/></button>{showMore&&<div className="flex flex-wrap gap-2 border-t border-gray-200 p-4"><Link to={'/clients/'+selected.clientId+'/status-report?inquiryId='+selected.id+(selected.projectId?'&projectId='+selected.projectId:'')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium">View status report</Link>{['NEW','IN_REVIEW'].includes(selected.qualificationStatus)&&<><button onClick={()=>changeStatus('NURTURED')} className="rounded-lg bg-gray-100 px-3 py-2 text-sm">Move to nurture</button><button onClick={()=>changeStatus('DECLINED')} className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Decline inquiry</button></>}</div>}</div>
           </div>}
+          {activeTab==='HISTORY'&&currentUser?.role==='ADMIN'&&<InquiryAuditTab inquiryId={selected.id}/>}
         </div>
       </FormModal>}
     </div>
@@ -1113,7 +1178,7 @@ function LegacyCriterionReviewPanel({inquiry,criteria,saving,onSave}:{inquiry:In
   </details>;
 }
 
-function InquiryPhaseProgress({completions,activePhaseIndex,onOpen}:{completions:Array<{requirements:Array<{label:string;complete:boolean}>;complete:boolean}>;activePhaseIndex:number;onOpen:(tab:TabKey)=>void}) {
+function InquiryPhaseProgress({completions,activePhaseIndex,onOpen,canJump,onJump}:{completions:Array<{requirements:Array<{label:string;complete:boolean;criterionId?:string}>;complete:boolean}>;activePhaseIndex:number;onOpen:(tab:TabKey)=>void;canJump:(criterionId:string)=>boolean;onJump:(criterionId:string)=>void}) {
   const phase = inquiryPhaseDefinitions[activePhaseIndex];
   const completion = completions[activePhaseIndex];
   const done = completion?.requirements.filter((requirement)=>requirement.complete).length ?? 0;
@@ -1124,7 +1189,7 @@ function InquiryPhaseProgress({completions,activePhaseIndex,onOpen}:{completions
         <div className="min-w-0"><p className="text-xs font-medium text-gray-500">Phase {activePhaseIndex+1} of {completions.length}</p><div className="mt-0.5 flex flex-wrap items-center gap-2"><span className="font-semibold text-gray-950">{phase.label}</span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${completion.complete?'bg-emerald-50 text-emerald-700':'bg-blue-50 text-blue-700'}`}>{completion.complete?'Complete':'In progress'}</span></div><p className="mt-1 text-xs text-gray-500">{done} of {total} requirements complete</p></div>
         <ChevronDown className="h-4 w-4 shrink-0 text-gray-500 transition group-open:rotate-180" aria-hidden="true"/>
       </summary>
-      <div className="border-t border-gray-100 px-4 py-3"><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">What remains</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{completion.requirements.filter((requirement)=>!requirement.complete).map((requirement)=><div key={requirement.label} className="flex items-center gap-2 text-sm text-gray-700"><span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-hidden="true"/><span>{requirement.label}</span></div>)}</div>{done===total&&<p className="mt-2 text-sm text-emerald-700">All requirements in this phase are complete.</p>}<button type="button" onClick={()=>onOpen(phase.tab)} className="mt-3 text-sm font-semibold text-blue-700 hover:underline">Open this phase</button></div>
+      <div className="border-t border-gray-100 px-4 py-3"><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">What remains</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{completion.requirements.filter((requirement)=>!requirement.complete).map((requirement)=>{const linked=requirement.criterionId?canJump(requirement.criterionId):false;return <div key={requirement.criterionId||requirement.label} className="flex items-center gap-2 text-sm text-gray-700"><span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-hidden="true"/>{linked?<button type="button" onClick={()=>onJump(requirement.criterionId!)} className="rounded text-left text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">{requirement.label}</button>:<span>{requirement.label}</span>}</div>;})}</div>{done===total&&<p className="mt-2 text-sm text-emerald-700">All requirements in this phase are complete.</p>}<button type="button" onClick={()=>onOpen(phase.tab)} className="mt-3 text-sm font-semibold text-blue-700 hover:underline">Open this phase</button></div>
     </details>}
   </section>;
 }

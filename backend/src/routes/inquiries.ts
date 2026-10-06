@@ -6,7 +6,7 @@ import { AppError } from '../utils/errors';
 import { authenticate, loadClientData, AuthRequest } from '../middleware/auth';
 import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 import { INQUIRY_STATUSES } from '../workflow/constants';
-import { writeAuditEvent } from '../workflow/audit';
+import { parseAuditValue, writeAuditEvent } from '../workflow/audit';
 import { phaseTemplates } from '../utils/poolProject';
 import { initializeWorkflowProject } from '../workflow/initialize';
 import { assertActiveAssignee } from '../workflow/authorization';
@@ -823,6 +823,48 @@ router.get('/inquiries/:id/activities', async (req: AuthRequest, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.get('/inquiries/:id/activity', async (req: AuthRequest, res, next) => {
+  try {
+    requireInternal(req);
+    const inquiry = await getAccessibleInquiry(req, req.params.id);
+    const pagination = getPaginationParams(req.query);
+    const querySchema = z.object({
+      actorId: z.string().trim().min(1).optional(),
+      action: z.string().trim().min(1).max(100).optional(),
+      from: z.coerce.date().optional(),
+      to: z.coerce.date().optional(),
+    }).refine((value) => !value.from || !value.to || value.from <= value.to, { message: 'The start date must be before the end date.' });
+    const filters = querySchema.parse(req.query);
+    const where: any = {
+      OR: [{ inquiryId: inquiry.id }, { entityType: 'Inquiry', entityId: inquiry.id }],
+      ...(filters.actorId ? { userId: filters.actorId } : {}),
+      ...(filters.action ? { action: filters.action } : {}),
+      ...(filters.from || filters.to ? { createdAt: { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } } : {}),
+    };
+    const [events, total] = await Promise.all([
+      prisma.activityLog.findMany({
+        where, skip: pagination.skip, take: pagination.limit,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true, userId: true, actorName: true, actorRole: true, action: true, entityType: true, entityId: true,
+          details: true, beforeState: true, afterState: true, createdAt: true, requestId: true,
+          user: { select: { name: true, role: true } },
+        },
+      }),
+      prisma.activityLog.count({ where }),
+    ]);
+    const data = events.map(({ user, details, beforeState, afterState, ...event }) => ({
+      ...event,
+      actorName: event.actorName || user?.name || 'Unknown user',
+      actorRole: event.actorRole || user?.role || 'UNKNOWN',
+      details: parseAuditValue(details),
+      before: parseAuditValue(beforeState),
+      after: parseAuditValue(afterState),
+    }));
+    res.json({ data, pagination: getPaginationResult(total, pagination) });
+  } catch (error) { next(error); }
+});
+
 router.post('/inquiries/:id/activities/:activityId/corrections', async (req: AuthRequest, res, next) => {
   try {
     requireInternal(req);
@@ -886,7 +928,7 @@ router.post('/inquiries/:id/activities/:activityId/corrections', async (req: Aut
           await saveCriterionState(tx, { inquiryId: inquiry.id, criterionId: 'CLIENT_DISPOSITION', answerState: 'UNKNOWN', reason: null, source: 'ADMIN', actorId: req.user!.id });
         }
       }
-      await writeAuditEvent(tx, { userId: req.user!.id, action: 'CORRECT', entityType: 'InquiryActivity', entityId: original.id, requestId: (req as any).requestId, before: original, after: created });
+      await writeAuditEvent(tx, { userId: req.user!.id, action: 'CORRECT', entityType: 'InquiryActivity', entityId: original.id, inquiryId: inquiry.id, requestId: (req as any).requestId, before: original, after: created });
       return created;
     });
     res.status(201).json(correction);
@@ -903,7 +945,7 @@ router.post('/inquiries/:id/evidence', async (req: AuthRequest, res, next) => {
     const evidence = await prisma.$transaction(async (tx) => {
       await advanceIntakeRevision(tx, inquiry.id, data.expectedIntakeRevision);
       const created = await tx.inquiryEvidence.create({ data: { inquiryId: inquiry.id, documentId: data.documentId, category: data.category, actorId: req.user!.id }, include: { document: true, actor: { select: { id: true, name: true } } } });
-      await writeAuditEvent(tx, { userId: req.user!.id, action: 'CATEGORIZE_SITE_EVIDENCE', entityType: 'InquiryEvidence', entityId: created.id, requestId: (req as any).requestId, after: created });
+      await writeAuditEvent(tx, { userId: req.user!.id, action: 'CATEGORIZE_SITE_EVIDENCE', entityType: 'InquiryEvidence', entityId: created.id, inquiryId: inquiry.id, requestId: (req as any).requestId, after: created });
       return created;
     });
     res.status(201).json(evidence);
@@ -978,7 +1020,7 @@ router.post('/inquiries/:id/activities', async (req: AuthRequest, res, next) => 
           clientDispositionComment: activity.outcomeDetail || activity.summary,
         } });
       }
-      await writeAuditEvent(tx, { userId: req.user!.id, action: 'CREATE', entityType: 'InquiryActivity', entityId: activity.id, requestId: (req as any).requestId, after: activity });
+      await writeAuditEvent(tx, { userId: req.user!.id, action: 'CREATE', entityType: 'InquiryActivity', entityId: activity.id, inquiryId: inquiry.id, requestId: (req as any).requestId, after: activity });
       return activity;
     });
     res.status(201).json(created);
@@ -1013,6 +1055,12 @@ router.post('/inquiries/:id/rom-preview', async (req: AuthRequest, res, next) =>
         romPreviewRevision: expectedIntakeRevision, romPreviewSavedAt: new Date(),
       } });
       if (updated.count !== 1) await advanceIntakeRevision(tx, inquiry.id, expectedIntakeRevision);
+      await writeAuditEvent(tx, {
+        userId: req.user!.id, action: 'ROM_PREVIEW_SAVED', entityType: 'Inquiry', entityId: inquiry.id,
+        inquiryId: inquiry.id, requestId: (req as any).requestId,
+        before: { romPreviewHash: current!.romPreviewHash, romPreviewRevision: current!.romPreviewRevision },
+        after: { romPreviewHash: built.hash, romPreviewRevision: expectedIntakeRevision, complete: built.complete },
+      });
       return { snapshot: built.snapshot, hash: built.hash, complete: built.complete, intakeRevision: expectedIntakeRevision };
     });
     res.json(result);
@@ -1057,6 +1105,13 @@ router.post('/inquiries/:id/disposition-responses', async (req: AuthRequest, res
         clientDispositionEvidenceActivityId: created.id, clientDispositionReviewStatus: 'PENDING_REVIEW',
         clientDispositionComment: data.comment || null,
       } });
+      await writeAuditEvent(tx, {
+        userId: req.user!.id, action: 'CLIENT_ROM_DISPOSITION_SUBMITTED', entityType: 'Inquiry', entityId: inquiry.id,
+        inquiryId: inquiry.id, requestId: (req as any).requestId,
+        details: { responseId: created.id, disposition: data.disposition },
+        before: { reviewStatus: inquiry.clientDispositionReviewStatus },
+        after: { reviewStatus: 'PENDING_REVIEW', disposition: data.disposition },
+      });
       return created;
     });
     res.status(202).json({ status: 'PENDING_REVIEW', responseId: activity.id });
@@ -1176,12 +1231,20 @@ router.post('/inquiries/:id/handoff-review', async (req: AuthRequest, res, next)
       const previewHash = previewIsCurrent ? currentRow!.romPreviewHash! : builtPreview.hash;
       const result = blockers.length ? 'RETURNED' : 'APPROVED';
       try {
-        return await tx.inquiryHandoffReview.create({ data: {
+        const created = await tx.inquiryHandoffReview.create({ data: {
           inquiryId: inquiry.id, reviewerId: req.user!.id, result,
           intakeRevision: data.expectedIntakeRevision, workflowVersion: RECEPTION_WORKFLOW_VERSION,
           checklistSnapshot: JSON.stringify(checklist), checklistHash: hashJson(checklist),
           romPreviewSnapshot: previewSnapshot, romPreviewHash: previewHash, reason: data.reason || (blockers.length ? 'Resolve the blockers listed in the review snapshot and resubmit.' : null),
         } });
+        await writeAuditEvent(tx, {
+          userId: req.user!.id, action: 'HANDOFF_REVIEW_RECORDED', entityType: 'Inquiry', entityId: inquiry.id,
+          inquiryId: inquiry.id, requestId: (req as any).requestId,
+          details: { reviewId: created.id, result, intakeRevision: data.expectedIntakeRevision, workflowVersion: RECEPTION_WORKFLOW_VERSION, blockerCount: blockers.length },
+          before: { result: latest?.result || null },
+          after: { result, blockerCount: blockers.length },
+        });
+        return created;
       } catch (error: any) {
         if (error?.code !== 'P2002') throw error;
         const prior = await tx.inquiryHandoffReview.findFirst({ where: { inquiryId: inquiry.id, intakeRevision: data.expectedIntakeRevision, workflowVersion: RECEPTION_WORKFLOW_VERSION } });
@@ -1232,6 +1295,7 @@ router.put('/inquiries/:id/criteria/:criterionId/state', async (req: AuthRequest
       throw new AppError('A recorded answer must be corrected or cleared before it can be marked unknown.', 400, 'VALIDATION_ERROR');
     }
 
+    const currentCriterion = before.readiness?.criteria.find((item: { id: string }) => item.id === criterion.id);
     await prisma.$transaction(async (tx) => {
       await advanceIntakeRevision(tx, before.id, data.expectedIntakeRevision);
       if (answerValue === 'NONE_IDENTIFIED') {
@@ -1251,6 +1315,13 @@ router.put('/inquiries/:id/criteria/:criterionId/state', async (req: AuthRequest
         actorId: req.user!.id,
       });
       await refreshLegacyReviewStatus(tx, before.id);
+      await writeAuditEvent(tx, {
+        userId: req.user!.id, action: 'INQUIRY_CRITERION_REVIEWED', entityType: 'Inquiry', entityId: before.id,
+        inquiryId: before.id, requestId: (req as any).requestId,
+        details: { criterionId: criterion.id, label: criterion.label },
+        before: { answerState: currentCriterion?.answerState || 'UNKNOWN', reason: currentCriterion?.reason || null },
+        after: { answerState: data.answerState, reason: data.reason || null, answerValue: answerValue || null },
+      });
     });
 
     res.json(await getAccessibleInquiry(req, before.id));
@@ -1627,7 +1698,7 @@ router.post('/inquiries/:id/missing-information', async (req: AuthRequest, res, 
       await tx.notification.create({
         data: { userId: clientUser.id, type: 'MISSING_INFORMATION', message: data.title, clientId: inquiry.clientId, inquiryId: inquiry.id, itemId: created.id },
       });
-      await writeAuditEvent(tx, { userId: req.user!.id, action: 'REQUEST', entityType: 'WorkItem', entityId: created.id, requestId: (req as any).requestId, after: created });
+      await writeAuditEvent(tx, { userId: req.user!.id, action: 'REQUEST', entityType: 'WorkItem', entityId: created.id, inquiryId: inquiry.id, requestId: (req as any).requestId, after: created });
       return created;
     });
     res.status(201).json(item);
