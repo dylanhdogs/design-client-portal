@@ -67,6 +67,19 @@ test('production deploy stays empty until the one-time administrator bootstrap r
     assert.notEqual(repeated.status, 0, 'Bootstrap must refuse to overwrite an existing administrator.');
     assert.equal(await isolated.user.count({ where: { role: 'ADMIN' } }), 1);
 
+    await isolated.user.create({
+      data: {
+        email: 'retired-staff@signature.test',
+        passwordHash: 'not-used-by-this-test',
+        name: 'Retired staff',
+        role: 'STAFF',
+        active: false,
+      },
+    });
+    const legacyStaffPreflight = runNpm(['run', 'preflight:user-management'], env, 60_000);
+    assert.equal(legacyStaffPreflight.status, 0, `${legacyStaffPreflight.stdout}\n${legacyStaffPreflight.stderr}`);
+    assert.match(legacyStaffPreflight.stdout, /user_management_preflight_passed/);
+
     await isolated.$queryRawUnsafe('PRAGMA busy_timeout = 10000');
     await isolated.$queryRawUnsafe('PRAGMA journal_mode = WAL');
     await Promise.all(Array.from({ length: 24 }, (_, index) => isolated.client.create({
