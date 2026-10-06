@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { authApi } from '../api';
+import { authApi, getApiErrorMessage } from '../api';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -28,7 +28,7 @@ export default function ResetPassword() {
       const res = await authApi.resetPassword(token!, newPassword);
       setMessage(res.data.message);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Something went wrong.');
+      setError(getApiErrorMessage(err, 'Something went wrong.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -74,9 +74,10 @@ export default function ResetPassword() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={12}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               />
+              <p className="mt-1 text-xs text-gray-500">Use at least 12 characters with uppercase, lowercase, number, and symbol.</p>
             </div>
 
             <div>
@@ -86,7 +87,7 @@ export default function ResetPassword() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={12}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>

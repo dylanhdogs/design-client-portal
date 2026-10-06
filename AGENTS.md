@@ -8,7 +8,7 @@ Full-stack web application for managing construction clients, consultations, doc
 
 - **Backend**: Node.js + Express + TypeScript + Prisma + SQLite
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS
-- **Auth**: JWT with role-based access (ADMIN, STAFF, CLIENT)
+- **Auth**: JWT with role-based access (ADMIN, CLIENT); legacy Staff accounts are retired
 - **File Uploads**: Multer with local storage
 
 ## Quick Start
@@ -27,7 +27,6 @@ npm run dev
 ## Demo Credentials
 
 - Admin: `admin@example.com` / `admin123`
-- Staff: `staff@example.com` / `staff123`
 - Client: `client@example.com` / `client123` (created by admin)
 
 ## Key Commands

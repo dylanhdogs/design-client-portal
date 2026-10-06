@@ -1,8 +1,9 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, FileText, MessageSquare, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, MessageSquare, LogOut, ClipboardList } from 'lucide-react';
 import Logo from './Logo';
 import NotificationBell from './NotificationBell';
+import PortalVersion from './PortalVersion';
 
 export default function ClientLayout() {
   const { user, logout } = useAuth();
@@ -13,9 +14,9 @@ export default function ClientLayout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
+    <div className="min-h-screen flex flex-col md:h-screen md:flex-row md:overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-blue-900 text-white flex flex-col md:min-h-screen">
+      <aside className="w-full md:w-64 md:h-screen md:sticky md:top-0 bg-blue-900 text-white flex flex-col shrink-0">
         <div className="p-4 md:p-6 border-b border-blue-800">
           <div className="flex items-center justify-between gap-3">
             <Logo size="sm" />
@@ -23,7 +24,7 @@ export default function ClientLayout() {
           </div>
         </div>
 
-        <nav className="flex md:flex-1 gap-2 overflow-x-auto p-3 md:p-4 md:block md:space-y-1">
+        <nav className="flex md:flex-1 md:min-h-0 gap-2 overflow-x-auto md:overflow-y-auto p-3 md:p-4 md:block md:space-y-1">
           <Link
             to="/my-project"
             className={`flex shrink-0 items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-lg transition-colors ${
@@ -43,6 +44,15 @@ export default function ClientLayout() {
             <span>My Documents</span>
           </Link>
           <Link
+            to="/my-inquiry"
+            className={`flex shrink-0 items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-lg transition-colors ${
+              isActive('/my-inquiry') ? 'bg-blue-600 text-white' : 'text-blue-100 hover:bg-blue-800'
+            }`}
+          >
+            <ClipboardList className="h-5 w-5" />
+            <span>Inquiry</span>
+          </Link>
+          <Link
             to="/my-communications"
             className={`flex shrink-0 items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-lg transition-colors ${
               isActive('/my-communications') ? 'bg-blue-600 text-white' : 'text-blue-100 hover:bg-blue-800'
@@ -53,7 +63,7 @@ export default function ClientLayout() {
           </Link>
         </nav>
 
-        <div className="p-3 md:p-4 border-t border-blue-800">
+        <div className="mt-auto shrink-0 p-3 md:p-4 border-t border-blue-800">
           <div className="hidden md:flex items-center gap-3 mb-4">
             <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">
               {user?.name?.[0]?.toUpperCase() || 'U'}
@@ -70,11 +80,12 @@ export default function ClientLayout() {
             <LogOut className="h-4 w-4" />
             <span>Logout</span>
           </button>
+          <PortalVersion tone="client" />
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 overflow-y-auto bg-gray-50">
+      <main className="flex-1 min-w-0 min-h-0 overflow-y-auto bg-gray-50">
         <div className="p-4 md:p-8">
           <Outlet />
         </div>

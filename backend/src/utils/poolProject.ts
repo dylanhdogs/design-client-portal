@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { initializeWorkflowProject } from '../workflow/initialize';
 
 export const phaseTemplates = [
   {
@@ -130,6 +131,10 @@ export async function createPoolProjectWithPhases(clientId: string, data: {
       });
     }
   }
+
+  await initializeWorkflowProject(prisma, project.id, {
+    organizationId: process.env.ORGANIZATION_ID || null,
+  });
 
   return project;
 }

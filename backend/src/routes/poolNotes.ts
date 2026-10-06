@@ -35,7 +35,7 @@ router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   }
 });
 
-// Create a pool note (ADMIN, STAFF, or CLIENT own)
+// Create a pool note (ADMIN or CLIENT own)
 router.post('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
     const { clientId } = req.params;
@@ -68,14 +68,17 @@ router.post('/', authenticate, restrictToOwnClient, async (req, res, next) => {
 });
 
 // Delete a pool note (ADMIN only, or the creator)
-router.delete('/:noteId', authenticate, async (req, res, next) => {
+router.delete('/:noteId', authenticate, restrictToOwnClient, async (req, res, next) => {
   try {
-    const { noteId } = req.params;
+    const { clientId, noteId } = req.params;
     const userId = (req as any).user.id;
     const userRole = (req as any).user.role;
     
-    const note = await prisma.poolNote.findUnique({
-      where: { id: noteId }
+    const project = await prisma.poolProject.findUnique({ where: { clientId }, select: { id: true } });
+    if (!project) throw new AppError('Pool project not found.', 404);
+
+    const note = await prisma.poolNote.findFirst({
+      where: { id: noteId, projectId: project.id }
     });
     
     if (!note) {

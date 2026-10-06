@@ -16,6 +16,16 @@ import ClientDocuments from './pages/client/ClientDocuments';
 import ClientCommunications from './pages/client/ClientCommunications';
 import AcceptInvite from './pages/AcceptInvite';
 import NotFound from './pages/NotFound';
+import ProjectCommandCenter from './pages/ProjectCommandCenter';
+import Inquiries from './pages/Inquiries';
+import ClientInquiry from './pages/client/ClientInquiry';
+import DesignWorkspace from './pages/DesignWorkspace';
+import ComplianceWorkspace from './pages/ComplianceWorkspace';
+import PreconstructionWorkspace from './pages/PreconstructionWorkspace';
+import ProcurementWorkspace from './pages/ProcurementWorkspace';
+import ManagementDashboard from './pages/ManagementDashboard';
+import ClientStatusReportPage from './pages/ClientStatusReport';
+import UsersPage from './pages/Users';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -40,6 +50,22 @@ function RoleBasedLayout() {
   return <Layout />;
 }
 
+function RoleRoute({
+  roles,
+  children,
+}: {
+  roles: Array<'ADMIN' | 'CLIENT'>;
+  children: React.ReactNode;
+}) {
+  const { user } = useAuth();
+
+  if (!user || !roles.includes(user.role)) {
+    return <Navigate to={user?.role === 'CLIENT' ? '/my-project' : '/'} replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -59,18 +85,28 @@ function App() {
               </PrivateRoute>
             }
           >
-            {/* Admin/Staff Routes */}
-            <Route index element={<Dashboard />} />
-            <Route path="clients" element={<Clients />} />
-            <Route path="clients/new" element={<ClientForm />} />
-            <Route path="clients/:id" element={<ClientDetail />} />
-            <Route path="clients/:id/edit" element={<ClientForm />} />
+            {/* Administrator routes */}
+            <Route index element={<RoleRoute roles={['ADMIN']}><Dashboard /></RoleRoute>} />
+            <Route path="clients" element={<RoleRoute roles={['ADMIN']}><Clients /></RoleRoute>} />
+            <Route path="clients/new" element={<RoleRoute roles={['ADMIN']}><ClientForm /></RoleRoute>} />
+            <Route path="clients/:id" element={<RoleRoute roles={['ADMIN']}><ClientDetail /></RoleRoute>} />
+            <Route path="clients/:id/edit" element={<RoleRoute roles={['ADMIN']}><ClientForm /></RoleRoute>} />
+            <Route path="clients/:id/status-report" element={<RoleRoute roles={['ADMIN']}><ClientStatusReportPage /></RoleRoute>} />
+            <Route path="users" element={<RoleRoute roles={['ADMIN']}><UsersPage /></RoleRoute>} />
+            <Route path="inquiries" element={<RoleRoute roles={['ADMIN']}><Inquiries /></RoleRoute>} />
+            <Route path="management" element={<RoleRoute roles={['ADMIN']}><ManagementDashboard /></RoleRoute>} />
+            <Route path="projects/:projectId" element={<RoleRoute roles={['ADMIN']}><ProjectCommandCenter /></RoleRoute>} />
+            <Route path="projects/:projectId/design" element={<RoleRoute roles={['ADMIN', 'CLIENT']}><DesignWorkspace /></RoleRoute>} />
+            <Route path="projects/:projectId/compliance" element={<RoleRoute roles={['ADMIN', 'CLIENT']}><ComplianceWorkspace /></RoleRoute>} />
+            <Route path="projects/:projectId/preconstruction" element={<RoleRoute roles={['ADMIN', 'CLIENT']}><PreconstructionWorkspace /></RoleRoute>} />
+            <Route path="projects/:projectId/procurement" element={<RoleRoute roles={['ADMIN', 'CLIENT']}><ProcurementWorkspace /></RoleRoute>} />
             
             {/* Client Routes */}
-            <Route path="my-project" element={<ClientDashboard />} />
-            <Route path="my-project/phase/:id" element={<MyProject />} />
-            <Route path="my-documents" element={<ClientDocuments />} />
-            <Route path="my-communications" element={<ClientCommunications />} />
+            <Route path="my-project" element={<RoleRoute roles={['CLIENT']}><ClientDashboard /></RoleRoute>} />
+            <Route path="my-project/phase/:id" element={<RoleRoute roles={['CLIENT']}><MyProject /></RoleRoute>} />
+            <Route path="my-documents" element={<RoleRoute roles={['CLIENT']}><ClientDocuments /></RoleRoute>} />
+            <Route path="my-communications" element={<RoleRoute roles={['CLIENT']}><ClientCommunications /></RoleRoute>} />
+            <Route path="my-inquiry" element={<RoleRoute roles={['CLIENT']}><ClientInquiry /></RoleRoute>} />
             <Route path="*" element={<NotFound />} />
           </Route>
           <Route path="*" element={<NotFound />} />

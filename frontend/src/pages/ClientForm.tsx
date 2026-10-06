@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { clientApi } from '../api';
+import { clientApi, getApiErrorMessage } from '../api';
 
 import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
 
@@ -97,7 +97,7 @@ export default function ClientForm() {
       }
       navigate('/clients');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save client.');
+      setError(getApiErrorMessage(err, 'Failed to save client.'));
     } finally {
       setIsSaving(false);
     }

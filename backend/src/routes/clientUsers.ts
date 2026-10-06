@@ -3,13 +3,14 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
+import { passwordSchema } from '../utils/password';
 import { authenticate, authorize } from '../middleware/auth';
 
 const router = express.Router({ mergeParams: true });
 
 const createClientUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: passwordSchema,
   name: z.string().min(1)
 });
 
@@ -24,7 +25,7 @@ router.post('/create-login', authenticate, authorize('ADMIN'), async (req, res, 
       where: { id: clientId }
     });
     
-    if (!client) {
+    if (!client || client.deletedAt) {
       throw new AppError('Client not found.', 404);
     }
     
@@ -46,7 +47,7 @@ router.post('/create-login', authenticate, authorize('ADMIN'), async (req, res, 
       throw new AppError('Email address already in use.', 409);
     }
     
-    const passwordHash = await bcrypt.hash(data.password, 10);
+    const passwordHash = await bcrypt.hash(data.password, 12);
     
     const user = await prisma.user.create({
       data: {

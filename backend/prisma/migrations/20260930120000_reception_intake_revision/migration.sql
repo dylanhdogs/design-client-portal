@@ -1,0 +1,1 @@
+ALTER TABLE "inquiries" ADD COLUMN "intake_revision" INTEGER NOT NULL DEFAULT 1;

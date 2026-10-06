@@ -1,0 +1,58 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npx prisma migrate deploy
+        working-directory: backend
+        env:
+          DATABASE_URL: file:./ci.db
+      - run: npm run build
+        working-directory: backend
+        env:
+          DATABASE_URL: file:./ci.db
+      - run: npm run db:seed
+        working-directory: backend
+        env:
+          DATABASE_URL: file:./ci.db
+          JWT_SECRET: ci-only-secret-with-at-least-thirty-two-characters
+      - run: npm run db:backfill
+        working-directory: backend
+        env:
+          DATABASE_URL: file:./ci.db
+      - run: npm test
+        working-directory: backend
+        env:
+          DATABASE_URL: file:./ci.db
+          JWT_SECRET: ci-only-secret-with-at-least-thirty-two-characters
+      - run: npm run verify:performance
+        working-directory: backend
+        env:
+          DATABASE_URL: file:./ci.db
+      - run: npm run verify:parity
+        working-directory: backend
+        env:
+          DATABASE_URL: file:./ci.db
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: backend
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend

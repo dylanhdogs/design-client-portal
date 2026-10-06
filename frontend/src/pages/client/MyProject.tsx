@@ -204,6 +204,7 @@ export default function MyProject() {
                   {phase.description && (
                     <p className="text-sm text-gray-500">{phase.description}</p>
                   )}
+                  {phase.status === 'COMPLETED' && <p className="mt-1 text-xs text-gray-500">Completed{phase.completedByUser ? ` by ${phase.completedByUser.name}` : ' · actor not recorded'}{phase.completedDate ? ` · ${new Date(phase.completedDate).toLocaleString()}` : ''}</p>}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
@@ -249,6 +250,7 @@ export default function MyProject() {
                           <span className={`text-sm ${item.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
                             {item.description}
                           </span>
+                          {item.isCompleted && <p className="mt-1 text-xs text-gray-500">Completed{item.completedByUser ? ` by ${item.completedByUser.name}` : ' · actor not recorded'}{item.completedAt ? ` · ${new Date(item.completedAt).toLocaleString()}` : ''}</p>}
                           {item.rejectionReason && (
                             <p className="mt-1 text-xs text-red-600">Admin note: {item.rejectionReason}</p>
                           )}

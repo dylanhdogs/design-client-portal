@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { clientApi } from '../api';
 import { Client } from '../types';
-import { Plus, Search, Users, Trash2, Edit } from 'lucide-react';
+import { Plus, Search, Users, Trash2, Edit, RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Clients() {
@@ -10,18 +10,20 @@ export default function Clients() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
     loadClients();
-  }, [status, search]);
+  }, [status, search, showArchived]);
 
   const loadClients = async () => {
     try {
       setIsLoading(true);
       const res = await clientApi.getAll({
         status: status || undefined,
-        search: search || undefined
+        search: search || undefined,
+        archived: showArchived || undefined,
       });
       setClients(res.data.data);
     } catch (err) {
@@ -32,10 +34,20 @@ export default function Clients() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this client? This action cannot be undone.')) return;
+    if (!confirm('Archive this client and immediately revoke linked portal access? The client can be restored later, but access must be reactivated separately.')) return;
     try {
       await clientApi.delete(id);
       setClients(clients.filter(c => c.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRestore = async (id: string) => {
+    if (!confirm('Restore this client record? Any linked portal account will remain suspended until an administrator reactivates it.')) return;
+    try {
+      await clientApi.restore(id);
+      setClients((current) => current.filter((client) => client.id !== id));
     } catch (err) {
       console.error(err);
     }
@@ -98,11 +110,20 @@ export default function Clients() {
             onChange={(e) => setStatus(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
           >
-            <option value="">All Client Statuses</option>
-            <option value="LEAD">Lead</option>
+            <option value="">Active clients</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
           </select>
+          {user?.role === 'ADMIN' && (
+            <button
+              type="button"
+              onClick={() => setShowArchived((value) => !value)}
+              aria-pressed={showArchived}
+              className={`px-4 py-2 border rounded-lg font-medium transition-colors ${showArchived ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              {showArchived ? 'Show current clients' : 'Show archived clients'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -126,12 +147,9 @@ export default function Clients() {
                       {client.name[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <Link
-                        to={`/clients/${client.id}`}
-                        className="font-medium text-gray-900 hover:text-blue-600 break-words"
-                      >
-                        {client.name}
-                      </Link>
+                      {showArchived ? <span className="font-medium text-gray-900 break-words">{client.name}</span> : (
+                        <Link to={`/clients/${client.id}`} className="font-medium text-gray-900 hover:text-blue-600 break-words">{client.name}</Link>
+                      )}
                       <p className="text-sm text-gray-500 break-words">{client.company || 'No company'}</p>
                     </div>
                   </div>
@@ -149,22 +167,26 @@ export default function Clients() {
                     <span title="Communications">💬 {client._count?.communications || 0}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Link
+                    {!showArchived && <Link
                       to={`/clients/${client.id}/edit`}
                       className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
                       aria-label={`Edit ${client.name}`}
                     >
                       <Edit className="h-4 w-4" />
-                    </Link>
-                    {user?.role === 'ADMIN' && (
+                    </Link>}
+                    {user?.role === 'ADMIN' && (showArchived ? (
+                      <button onClick={() => handleRestore(client.id)} className="p-2 text-gray-400 hover:text-green-700 transition-colors" aria-label={`Restore ${client.name}`}>
+                        <RotateCcw className="h-4 w-4" />
+                      </button>
+                    ) : (
                       <button
                         onClick={() => handleDelete(client.id)}
                         className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                        aria-label={`Delete ${client.name}`}
+                        aria-label={`Archive ${client.name}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>
@@ -204,12 +226,13 @@ export default function Clients() {
                           {client.name[0].toUpperCase()}
                         </div>
                         <div>
-                          <Link
+                          {!showArchived && <Link
                             to={`/clients/${client.id}`}
                             className="font-medium text-gray-900 hover:text-blue-600"
                           >
                             {client.name}
-                          </Link>
+                          </Link>}
+                          {showArchived && <span className="font-medium text-gray-900">{client.name}</span>}
                         </div>
                       </div>
                     </td>
@@ -235,20 +258,26 @@ export default function Clients() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link
+                        {!showArchived && <Link
                           to={`/clients/${client.id}/edit`}
                           className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                         >
                           <Edit className="h-4 w-4" />
-                        </Link>
-                        {user?.role === 'ADMIN' && (
+                        </Link>}
+                        {user?.role === 'ADMIN' && (showArchived ? (
+                          <button onClick={() => handleRestore(client.id)} className="p-1 text-gray-400 hover:text-green-700 transition-colors" aria-label={`Restore ${client.name}`} title="Restore client">
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                        ) : (
                           <button
                             onClick={() => handleDelete(client.id)}
                             className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                            aria-label={`Archive ${client.name}`}
+                            title="Archive client"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                        )}
+                        ))}
                       </div>
                     </td>
                   </tr>

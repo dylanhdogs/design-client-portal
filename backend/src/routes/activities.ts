@@ -5,7 +5,7 @@ import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 
 const router = express.Router();
 
-router.get('/', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.get('/', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
     const pagination = getPaginationParams(req.query);
     const { entityType, entityId } = req.query;

@@ -2,7 +2,8 @@ import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
-import { authenticate, authorize, restrictToOwnClient } from '../middleware/auth';
+import { assertDeletionAllowed } from '../utils/operations';
+import { authenticate, authorize, restrictToOwnClient, AuthRequest } from '../middleware/auth';
 import { getPaginationParams, getPaginationResult } from '../utils/pagination';
 import { logActivity } from '../utils/activity';
 
@@ -21,6 +22,9 @@ router.get('/', authenticate, restrictToOwnClient, async (req, res, next) => {
     const { clientId } = req.params;
     const { includeDeleted } = req.query;
     const pagination = getPaginationParams(req.query);
+    if (includeDeleted === 'true' && (req as AuthRequest).user?.role === 'CLIENT') {
+      throw new AppError('Archived communications are available only to internal users.', 403, 'FORBIDDEN');
+    }
     
     const where: any = { clientId };
     if (includeDeleted !== 'true') where.deletedAt = null;
@@ -47,6 +51,9 @@ router.post('/', authenticate, restrictToOwnClient, async (req, res, next) => {
     const { clientId } = req.params;
     const data = communicationSchema.parse(req.body);
     const userId = (req as any).user.id;
+    if ((req as AuthRequest).user?.role === 'CLIENT' && data.direction !== 'INBOUND') {
+      throw new AppError('Client communications must be recorded as inbound.', 400, 'VALIDATION_ERROR');
+    }
     
     const communication = await prisma.communication.create({
       data: {
@@ -68,10 +75,13 @@ router.post('/', authenticate, restrictToOwnClient, async (req, res, next) => {
   }
 });
 
-router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.put('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const { clientId, id } = req.params;
     const data = communicationSchema.partial().parse(req.body);
+
+    const existing = await prisma.communication.findFirst({ where: { id, clientId, deletedAt: null } });
+    if (!existing) throw new AppError('Communication not found.', 404);
     
     const communication = await prisma.communication.update({
       where: { id },
@@ -81,6 +91,8 @@ router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, n
         date: data.date ? new Date(data.date) : undefined
       }
     });
+
+    logActivity((req as any).user.id, 'UPDATE', 'Communication', id, { subject: communication.subject });
     
     res.json(communication);
   } catch (err) {
@@ -88,11 +100,12 @@ router.put('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, n
   }
 });
 
-router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.delete('/:id', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const comm = await prisma.communication.findFirst({ where: { id, deletedAt: null } });
+    const { clientId, id } = req.params;
+    const comm = await prisma.communication.findFirst({ where: { id, clientId, deletedAt: null } });
     if (!comm) throw new AppError('Communication not found.', 404);
+    await assertDeletionAllowed('Communication', id, clientId);
 
     await prisma.communication.update({
       where: { id },
@@ -106,10 +119,10 @@ router.delete('/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res
   }
 });
 
-router.post('/:id/restore', authenticate, authorize('ADMIN', 'STAFF'), async (req, res, next) => {
+router.post('/:id/restore', authenticate, authorize('ADMIN'), async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const comm = await prisma.communication.findFirst({ where: { id, deletedAt: { not: null } } });
+    const { clientId, id } = req.params;
+    const comm = await prisma.communication.findFirst({ where: { id, clientId, deletedAt: { not: null } } });
     if (!comm) throw new AppError('Deleted communication not found.', 404);
 
     await prisma.communication.update({

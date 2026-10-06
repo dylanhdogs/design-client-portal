@@ -1,7 +1,17 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { clientUserApi } from '../api';
+import { clientUserApi, getApiErrorMessage } from '../api';
 import { AlertCircle, CheckCircle, Loader } from 'lucide-react';
+
+const getPasswordError = (value: string): string => {
+  if (value.length < 12) return 'Password must be at least 12 characters.';
+  if (value.length > 128) return 'Password must be no more than 128 characters.';
+  if (!/[a-z]/.test(value)) return 'Password must include a lowercase letter.';
+  if (!/[A-Z]/.test(value)) return 'Password must include an uppercase letter.';
+  if (!/\d/.test(value)) return 'Password must include a number.';
+  if (!/[^A-Za-z0-9]/.test(value)) return 'Password must include a symbol.';
+  return '';
+};
 
 export default function AcceptInvite() {
   const [searchParams] = useSearchParams();
@@ -31,7 +41,7 @@ export default function AcceptInvite() {
       const res = await clientUserApi.checkInvite(token!);
       setInvite(res.data);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid or expired invitation.');
+      setError(getApiErrorMessage(err, 'Invalid or expired invitation.'));
     } finally {
       setLoading(false);
     }
@@ -41,6 +51,18 @@ export default function AcceptInvite() {
     e.preventDefault();
     setError('');
 
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError('Enter your name.');
+      return;
+    }
+
+    const passwordError = getPasswordError(password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -49,10 +71,10 @@ export default function AcceptInvite() {
     setIsSubmitting(true);
 
     try {
-      const res = await clientUserApi.acceptInvite(token!, { name, password });
+      const res = await clientUserApi.acceptInvite(token!, { name: trimmedName, password });
       setSuccess(res.data.message);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to accept invitation.');
+      setError(getApiErrorMessage(err, 'Failed to accept invitation.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -130,6 +152,8 @@ export default function AcceptInvite() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              autoComplete="name"
+              maxLength={100}
               required
             />
           </div>
@@ -141,9 +165,12 @@ export default function AcceptInvite() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              autoComplete="new-password"
               required
-              minLength={6}
+              minLength={12}
+              maxLength={128}
             />
+            <p className="mt-1 text-xs text-gray-500">Use at least 12 characters with uppercase, lowercase, number, and symbol.</p>
           </div>
 
           <div>
@@ -153,8 +180,10 @@ export default function AcceptInvite() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              autoComplete="new-password"
               required
-              minLength={6}
+              minLength={12}
+              maxLength={128}
             />
           </div>
 

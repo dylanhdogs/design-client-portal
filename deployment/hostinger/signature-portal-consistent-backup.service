@@ -1,0 +1,17 @@
+[Unit]
+Description=Create a write-consistent encrypted Signature Portal production backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/bash /opt/signature-portal-production/current/deployment/hostinger/consistent-backup.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/signature-portal-production /run/lock
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

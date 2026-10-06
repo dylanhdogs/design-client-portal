@@ -1,46 +1,23 @@
 import express from 'express';
-import path from 'path';
-import jwt from 'jsonwebtoken';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../utils/errors';
-import { authenticate, AuthRequest } from '../middleware/auth';
-import { getJwtSecret } from '../utils/env';
+import { resolveStoredFile } from '../utils/storage';
+import { AuthRequest, authenticate } from '../middleware/auth';
 
 const router = express.Router();
 
-router.get('/:id', async (req, res, next) => {
+const inlineDisposition = (filename: string): string => {
+  const fallback = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_').slice(0, 150) || 'document';
+  const encoded = encodeURIComponent(filename).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `inline; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+};
+
+router.get('/:id', authenticate, async (req: AuthRequest, res, next) => {
   try {
-    let user: any = null;
+    const user = req.user!;
 
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      const token = authHeader.split(' ')[1];
-      if (token) {
-        try {
-          user = jwt.verify(token, getJwtSecret());
-        } catch {
-          // token invalid, continue without user
-        }
-      }
-    }
-
-    if (!user) {
-      const queryToken = req.query.token as string;
-      if (queryToken) {
-        try {
-          user = jwt.verify(queryToken, getJwtSecret());
-        } catch {
-          throw new AppError('Invalid or expired token.', 401);
-        }
-      }
-    }
-
-    if (!user) {
-      throw new AppError('Access denied. No token provided.', 401);
-    }
-
-    const doc = await prisma.document.findUnique({
-      where: { id: req.params.id },
+    const doc = await prisma.document.findFirst({
+      where: { id: req.params.id, deletedAt: null },
       select: {
         id: true,
         filename: true,
@@ -54,7 +31,7 @@ router.get('/:id', async (req, res, next) => {
       throw new AppError('File not found.', 404);
     }
 
-    if (user.role !== 'ADMIN' && user.role !== 'STAFF') {
+    if (user.role !== 'ADMIN') {
       if (user.role === 'CLIENT') {
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
@@ -69,10 +46,12 @@ router.get('/:id', async (req, res, next) => {
       }
     }
 
-    const filePath = path.join(process.cwd(), 'uploads', doc.filename);
+    const filePath = resolveStoredFile(doc.filename);
 
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Pragma', 'no-cache');
     res.setHeader('Content-Type', doc.mimeType);
-    res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
+    res.setHeader('Content-Disposition', inlineDisposition(doc.originalName));
     res.sendFile(filePath);
   } catch (err) {
     next(err);

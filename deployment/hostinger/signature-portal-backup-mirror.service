@@ -1,0 +1,18 @@
+[Unit]
+Description=Mirror Signature Portal encrypted backups off server
+After=network-online.target signature-portal@production.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=portal
+Group=portal
+ExecStart=/usr/bin/bash /opt/signature-portal-production/current/deployment/hostinger/mirror-backups.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/srv/signature-portal-production/backups
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+Environment=HOME=/tmp

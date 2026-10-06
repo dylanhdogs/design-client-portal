@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { clientUserApi } from '../api';
-import { AlertCircle, X, CheckCircle } from 'lucide-react';
+import { clientUserApi, getApiErrorMessage } from '../api';
+import { AlertCircle, Check, CheckCircle, Copy, X } from 'lucide-react';
 
 interface InviteClientFormProps {
   clientId: string;
@@ -11,36 +11,64 @@ export default function InviteClientForm({ clientId, onCancel }: InviteClientFor
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setInviteLink('');
+    setCopied(false);
+    setCopyError('');
     setIsLoading(true);
 
     try {
       const res = await clientUserApi.invite(clientId, { email });
-      setSuccess(`Invitation sent! The invite link is: ${res.data.inviteLink}`);
+      setSuccess(res.data.message);
+      setInviteLink(res.data.inviteLink);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to send invitation.');
+      setError(getApiErrorMessage(err, 'Failed to send invitation.'));
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      setCopyError('');
+    } catch {
+      setCopied(false);
+      setCopyError('Copy failed. Select the link and copy it manually.');
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invite-client-title"
+        className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-lg bg-white p-6 shadow-lg"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Invite Client</h2>
-          <button onClick={onCancel} className="p-1 text-gray-400 hover:text-gray-600">
+          <h2 id="invite-client-title" className="text-lg font-semibold text-gray-900">Invite Client</h2>
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Close invite client window"
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <p className="text-sm text-gray-500 mb-4">
-          Send an email invitation. The client will create their own password.
+          Create a secure invitation link. Email delivery depends on the configured notification service.
         </p>
 
         {error && (
@@ -51,17 +79,43 @@ export default function InviteClientForm({ clientId, onCancel }: InviteClientFor
         )}
 
         {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-2 text-green-700 text-sm mb-2">
-              <CheckCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{success}</span>
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4" aria-live="polite">
+            <div className="mb-3 flex min-w-0 items-start gap-2 text-sm text-green-800">
+              <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <p className="min-w-0">{success}</p>
             </div>
-            <button
-              onClick={onCancel}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              Done
-            </button>
+
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-green-900">Secure invitation link</p>
+            <div className="rounded-md border border-green-200 bg-white p-3">
+              <p className="break-all font-mono text-xs leading-5 text-gray-700" tabIndex={0}>
+                {inviteLink}
+              </p>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-h-5 text-xs">
+                {copied && <span className="text-green-800">Link copied to clipboard.</span>}
+                {copyError && <span className="text-red-700">{copyError}</span>}
+              </div>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-white px-3 py-2 text-sm font-medium text-green-800 transition-colors hover:bg-green-100"
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+
+            <div className="mt-4 flex justify-end border-t border-green-200 pt-4">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Done
+              </button>
+            </div>
           </div>
         )}
 
@@ -90,7 +144,7 @@ export default function InviteClientForm({ clientId, onCancel }: InviteClientFor
                 disabled={isLoading}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
-                {isLoading ? 'Sending...' : 'Send Invite'}
+                {isLoading ? 'Creating...' : 'Create Invite'}
               </button>
             </div>
           </form>

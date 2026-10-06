@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { clientApi, consultationApi, documentApi, communicationApi, poolProjectApi, clientUserApi, phaseApi } from '../api';
+import { clientApi, consultationApi, documentApi, communicationApi, poolProjectApi, phaseApi } from '../api';
 import { Client, Consultation, Communication, ProjectPhase, ChecklistItem } from '../types';
 import { useAuth } from '../context/AuthContext';
-import CreateLoginForm from '../components/CreateLoginForm';
-import InviteClientForm from '../components/InviteClientForm';
 import PhaseProgressBar from '../components/PhaseProgressBar';
 import DocumentUpload from '../components/DocumentUpload';
 import PhaseCompletionCircle from '../components/PhaseCompletionCircle';
@@ -23,9 +21,6 @@ export default function ClientDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'consultations' | 'documents' | 'communications' | 'poolProject'>('consultations');
   const [error, setError] = useState('');
-  const [showCreateLogin, setShowCreateLogin] = useState(false);
-  const [showInviteClient, setShowInviteClient] = useState(false);
-  const [hasLogin, setHasLogin] = useState(false);
 
   // Consultation form
   const [showConsultationForm, setShowConsultationForm] = useState(false);
@@ -76,14 +71,6 @@ export default function ClientDetail() {
       setIsLoading(true);
       const res = await clientApi.getById(id!);
       setClient(res.data);
-      
-      // Check if client has a login account
-      try {
-        const loginRes = await clientUserApi.getLoginInfo(id!);
-        setHasLogin(!!loginRes.data);
-      } catch {
-        setHasLogin(false);
-      }
     } catch (err) {
       console.error(err);
       setError('Failed to load client details.');
@@ -93,7 +80,7 @@ export default function ClientDetail() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this client? This action cannot be undone.')) return;
+    if (!confirm('Archive this client and immediately revoke linked portal access? The client can be restored from the Archived Clients view, but access must be reactivated separately.')) return;
     try {
       await clientApi.delete(id!);
       navigate('/clients');
@@ -236,6 +223,9 @@ export default function ClientDetail() {
     );
   }
 
+  const receptionInquiry = client.inquiries?.find((inquiry) => inquiry.qualificationStatus === 'CONVERTED');
+  const activeProjectPhases = client.poolProject?.phases?.filter((phase) => phase.name !== 'INTAKE') || [];
+
   return (
     <div>
       {error && (
@@ -267,6 +257,15 @@ export default function ClientDetail() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {client.poolProject && (
+              <Link
+                to={`/clients/${client.id}/status-report?projectId=${client.poolProject.id}`}
+                className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 font-medium text-blue-700 transition-colors hover:bg-blue-100"
+              >
+                <FileText className="h-4 w-4" />
+                <span>Status Report</span>
+              </Link>
+            )}
             {!client.poolProject && (
               <button
                 onClick={handleCreatePoolProject}
@@ -276,23 +275,14 @@ export default function ClientDetail() {
                 <span>Create Pool Project</span>
               </button>
             )}
-            {!hasLogin && (
-              <button
-                onClick={() => setShowCreateLogin(true)}
-                className="flex items-center gap-2 px-3 py-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+            {user?.role === 'ADMIN' && (
+              <Link
+                to={`/users?clientId=${encodeURIComponent(client.id)}`}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-blue-700 transition-colors hover:bg-blue-50"
               >
                 <UserPlus className="h-4 w-4" />
-                <span>Create Client Login</span>
-              </button>
-            )}
-            {!hasLogin && (
-              <button
-                onClick={() => setShowInviteClient(true)}
-                className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span>Invite Client</span>
-              </button>
+                <span>Manage client access</span>
+              </Link>
             )}
             <Link
               to={`/clients/${client.id}/edit`}
@@ -307,7 +297,7 @@ export default function ClientDetail() {
                 className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Delete</span>
+                <span>Archive</span>
               </button>
             )}
           </div>
@@ -653,13 +643,19 @@ export default function ClientDetail() {
           {activeTab === 'poolProject' && client.poolProject && (
             <div>
               <div className="mb-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Pool Project</h3>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-lg font-medium text-gray-900">Pool Project</h3>
+                  {receptionInquiry && <Link to={`/inquiries?inquiryId=${receptionInquiry.id}`} className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-700">Reception record</Link>}
+                  <Link to={`/projects/${client.poolProject.id}`} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
+                    <Briefcase className="h-4 w-4" />Open command center
+                  </Link>
+                </div>
                 
                 {/* Progress Bar */}
                 <div className="mb-6">
                   <PhaseProgressBar
-                    currentPhase={client.poolProject.currentPhase}
-                    phases={client.poolProject.phases || []}
+                    currentPhase={Math.max(client.poolProject.currentPhase - 1, 1)}
+                    phases={activeProjectPhases}
                   />
                 </div>
                 
@@ -689,14 +685,17 @@ export default function ClientDetail() {
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-2">Phase Status</h4>
                     <div className="space-y-2">
-                      {client.poolProject.phases?.map((phase) => {
+                      {activeProjectPhases.map((phase) => {
                         const businessDays = getInProgressBusinessDays(phase);
 
                         return (
                           <div key={phase.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <PhaseCompletionCircle items={phase.checklistItems} size="sm" />
-                              <span className="text-sm text-gray-700">{phase.displayName}</span>
+                              <div>
+                                <span className="text-sm text-gray-700">{phase.displayName}</span>
+                                {phase.status === 'COMPLETED' && <p className="mt-0.5 text-xs text-gray-500">Completed{phase.completedByUser ? ` by ${phase.completedByUser.name}` : ' · actor not recorded'}{phase.completedDate ? ` · ${new Date(phase.completedDate).toLocaleString()}` : ''}</p>}
+                              </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               {businessDays !== null && (
@@ -722,7 +721,7 @@ export default function ClientDetail() {
                 {/* Phases with Checklist */}
                 <div className="space-y-4">
                   <h4 className="text-sm font-medium text-gray-700">Phase Checklists</h4>
-                  {client.poolProject.phases?.map((phase) => {
+                  {activeProjectPhases.map((phase) => {
                     const businessDays = getInProgressBusinessDays(phase);
 
                     return (
@@ -767,6 +766,7 @@ export default function ClientDetail() {
                                 <span className={`text-sm ${item.isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>
                                   {item.description}
                                 </span>
+                                {item.isCompleted && <p className="mt-0.5 text-xs text-gray-500">Completed{item.completedByUser ? ` by ${item.completedByUser.name}` : ' · actor not recorded'}{item.completedAt ? ` · ${new Date(item.completedAt).toLocaleString()}` : ''}</p>}
                                 {item.rejectionReason && (
                                   <p className="mt-1 text-xs text-red-600">Rejection note: {item.rejectionReason}</p>
                                 )}
@@ -809,27 +809,6 @@ export default function ClientDetail() {
         </div>
       </div>
       
-      {/* Create Login Modal */}
-      {showCreateLogin && (
-        <CreateLoginForm
-          clientId={client.id}
-          clientName={client.name}
-          onSuccess={() => {
-            setShowCreateLogin(false);
-            setHasLogin(true);
-            loadClient();
-          }}
-          onCancel={() => setShowCreateLogin(false)}
-        />
-      )}
-
-      {/* Invite Client Modal */}
-      {showInviteClient && (
-        <InviteClientForm
-          clientId={client.id}
-          onCancel={() => setShowInviteClient(false)}
-        />
-      )}
     </div>
   );
 }

@@ -1,0 +1,9 @@
+services:
+  backend:
+    build:
+      context: "./releases/${RELEASE_ID:?RELEASE_ID is required}"
+      dockerfile: deployment/hostinger/Dockerfile.traefik
+      args:
+        VITE_APP_VERSION: "${RELEASE_ID:?RELEASE_ID is required}"
+        VITE_APP_RELEASE_ID: "${RELEASE_ID:?RELEASE_ID is required}"
+    image: "signature-portal:${RELEASE_ID:?RELEASE_ID is required}"
